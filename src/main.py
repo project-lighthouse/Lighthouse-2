@@ -54,13 +54,10 @@ def main():
         frame = current
 
         # Our operations on the frame come here
-#        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
         if detecting:
             motion = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
             positive = cv2.bitwise_and(motion, 255)
-            negative = cv2.bitwise_and(motion, 127)
-#            filtered = cv2.bitwise_and(gray, positive)
+#            negative = cv2.bitwise_and(motion, 127)
             collector = collector + positive
             detection_countdown -= 1
             if detection_countdown <= 0:
@@ -69,15 +66,22 @@ def main():
 
                 # FIXME: We are only interested in pixels for which we have
                 # seen motion recently AND show up as active in collector.
-                threshold = numpy.median(collector)
-                # ret, collector = cv2.threshold(collector, threshold, 255, cv2.THRESH_BINARY)
+                threshold = numpy.percentile(collector, 75) # A bit too arbitrary for my tastes
 
-#                display = cv2.bitwise_and(collector, frame)
+                # I'd prefer calling the faster cv2.threshold, but it doesn't like uint64
+                coll2 = numpy.zeros((HEIGHT, WIDTH), numpy.uint8)
+                display = numpy.zeros((HEIGHT, WIDTH, 3), numpy.uint8)
+                for y in range(0,HEIGHT):
+                    for x in range(0,WIDTH):
+                        if collector[y,x] > threshold:
+                            coll2[y,x] = 255
+                            display[y,x] = frame[y,x]
 
                 # Display where we have seen most motion during the countdown.
-#                cv2.imshow('result', display)
-                cv2.imshow('collector', collector)
+                cv2.imshow('result', display)
+                cv2.imshow('collector', coll2)
                 cv2.imshow('motion', motion)
+
 
 
         # Display the resulting frame
