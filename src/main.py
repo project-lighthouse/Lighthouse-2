@@ -60,17 +60,16 @@ def main():
             detection_countdown -= 1
 
             cv2.imshow('tracking', positive)
-            cv2.moveWindow('tracking', WIDTH, HEIGHT)
+            cv2.moveWindow('tracking', WIDTH + 32, HEIGHT + 32)
 
             tracking = cv2.bitwise_and(positive, current)
             cv2.imshow('objects', tracking)
-            cv2.moveWindow('objects', 0, HEIGHT)
-
-            cv2.imwrite('/tmp/tracking.png', tracking)
+            cv2.moveWindow('objects', 0, HEIGHT + 32)
 
             if detection_countdown <= 0:
                 # Detection is over, time to extract/show the result.
                 detecting = False
+                cv2.imwrite('/tmp/tracking.png', tracking)
 
     # When everything done, release the capture
     cap.release()
