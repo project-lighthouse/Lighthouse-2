@@ -56,7 +56,11 @@ def main():
         # Our operations on the frame come here
         if detecting:
             foreground = backgroundSubstractor.apply(current) # FIXME: Is this the right subtraction?
-            mask = cv2.bitwise_and(foreground, 255)
+
+            # Smoothen a bit the mask to get back some of the missing pixels
+            mask = cv2.blur(cv2.bitwise_and(foreground, 255), (5, 5))
+            ret, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+
             color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
             detection_countdown -= 1
 
