@@ -56,20 +56,26 @@ def main():
         # Our operations on the frame come here
         if detecting:
             foreground = backgroundSubstractor.apply(current) # FIXME: Is this the right subtraction?
-            positive = cv2.cvtColor(cv2.bitwise_and(foreground, 255), cv2.COLOR_GRAY2RGB)
+            mask = cv2.bitwise_and(foreground, 255)
+            color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
             detection_countdown -= 1
 
-            cv2.imshow('tracking', positive)
+            cv2.imshow('tracking', mask)
             cv2.moveWindow('tracking', WIDTH + 32, HEIGHT + 32)
 
-            tracking = cv2.bitwise_and(positive, current)
+            tracking = cv2.bitwise_and(color_mask, current)
             cv2.imshow('objects', tracking)
             cv2.moveWindow('objects', 0, HEIGHT + 32)
 
             if detection_countdown <= 0:
                 # Detection is over, time to extract/show the result.
                 detecting = False
-                cv2.imwrite('/tmp/tracking.png', tracking)
+                extrapolated = cv2.inpaint(tracking, cv2.bitwise_not(mask), 3, cv2.INPAINT_TELEA)
+
+                cv2.imshow('extrapolated', extrapolated)
+                cv2.moveWindow('extrapolated', WIDTH + 32, 0)
+                cv2.imwrite('/tmp/object.png', tracking)
+                cv2.imwrite('/tmp/inpainted.png', extrapolated)
 
     # When everything done, release the capture
     cap.release()
