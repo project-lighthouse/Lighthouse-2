@@ -56,14 +56,13 @@ def main():
         # Our operations on the frame come here
         if detecting:
             foreground = backgroundSubstractor.apply(current) # FIXME: Is this the right subtraction?
-            positive = cv2.bitwise_and(foreground, 255)
+            positive = cv2.cvtColor(cv2.bitwise_and(foreground, 255), cv2.COLOR_GRAY2RGB)
             detection_countdown -= 1
 
             cv2.imshow('tracking', positive)
             cv2.moveWindow('tracking', WIDTH, HEIGHT)
 
-            gray = cv2.cvtColor(current, cv2.COLOR_BGR2GRAY)
-            tracking = cv2.bitwise_and(positive, gray)
+            tracking = cv2.bitwise_and(positive, current)
             cv2.imshow('objects', tracking)
             cv2.moveWindow('objects', 0, HEIGHT)
 
