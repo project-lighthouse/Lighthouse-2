@@ -23,6 +23,7 @@ def main():
     if cap is None or not cap.isOpened():
         print('Error: unable to open video source')
         return -1
+
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 
@@ -154,14 +155,17 @@ def stabilize(frames):
             else:
                 dx = transform[0, 2]
                 dy = transform[1, 2]
-                da = math.atan2(transform[1, 0], transform[0, 0])
 
                 result = None
 
                 if dx == 0. and dy == 0.:
                     print("stabilize: dx and dy are 0")
+                    # For some reason I don't understand yet, if both dx and dy are 0,
+                    # our matrix multiplication doesn't seem to make sense.
                     result = cur
                 else:
+                    da = math.atan2(transform[1, 0], transform[0, 0])
+
                     acc_dx += dx
                     if acc_dx > max_acc_dx:
                         max_acc_dx = acc_dx
@@ -186,8 +190,8 @@ def stabilize(frames):
                     print("stabilize: current transform\n %s" % transform)
                     print("stabilize: padded transform\n %s" % padded_transform)
                     print("stabilize: full transform\n %s" % acc_transform)
-                    print("stabilize: resized full transform\n %s" % acc_transform[0:2, :])
-                    result = cv2.warpAffine(cur, acc_transform[0:2,:], (WIDTH, HEIGHT), cv2.INTER_NEAREST | cv2.WARP_INVERSE_MAP )
+                    print("stabilize: resized full transform\n %s" % numpy.round(acc_transform[0:2, :]))
+                    result = cv2.warpAffine(cur, numpy.round(acc_transform[0:2,:]), (WIDTH, HEIGHT), cv2.INTER_NEAREST)
                 stabilized.append(result)
 
                 debug_after_writer.write(result)
