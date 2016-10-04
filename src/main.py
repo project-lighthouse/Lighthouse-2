@@ -5,10 +5,11 @@ import sys
 
 WIDTH = 320
 HEIGHT = 200
+BLUR = (5, 5)
 
 # Number of frames during which to run detection. Divide by ~16 to obtain
 # a number of seconds.
-FRAMES_TO_DETECT = 30
+FRAMES_BUFFER_SIZE = 60
 
 def main():
     """Main entry point for the script."""
@@ -26,13 +27,14 @@ def main():
 
     backgroundSubstractor = cv2.createBackgroundSubtractorMOG2()
 
-    # Record pixels where we have had most motion.
-    detecting = False
-    detection_countdown = 0
+    idle = True
     force_start = True
 
+    # A buffer holding the frames. It will hold up to FRAMES_BUFFER_SIZE framesselfself.
+    frames = None
+
     while(True):
-        # Capture frame-by-frame
+        # Capture frame-by-frame.
         ret, current = cap.read()
 
         key = cv2.waitKey(1) & 0xFF
@@ -42,8 +44,8 @@ def main():
         # <spacebar> or `force_start`: start detecting.
         elif key == ord(' ') or force_start:
             force_start = False
-            detecting = True
-            detection_countdown = FRAMES_TO_DETECT
+            idle = False
+            frames = []
 
         if not ret:
             # Somehow, we failed to capture the frame.
@@ -53,33 +55,37 @@ def main():
         cv2.imshow('frame', current)
         cv2.moveWindow('frame', 0, 0)
 
-        # Our operations on the frame come here
-        if detecting:
-            foreground = backgroundSubstractor.apply(current) # FIXME: Is this the right subtraction?
+        if idle:
+            continue
 
-            # Smoothen a bit the mask to get back some of the missing pixels
-            mask = cv2.blur(cv2.bitwise_and(foreground, 255), (5, 5))
-            ret, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+        if len(frames) < FRAMES_BUFFER_SIZE:
+            # We are not done buffering.
+            frames.append(current)
+            continue
 
-            color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
-            detection_countdown -= 1
+        # At this stage, we are done buffering. Stop recording, start processing.
+        idle = True
 
-            cv2.imshow('tracking', mask)
-            cv2.moveWindow('tracking', WIDTH + 32, HEIGHT + 32)
+        # FIXME: Stabilize image
 
-            tracking = cv2.bitwise_and(color_mask, current)
-            cv2.imshow('objects', tracking)
-            cv2.moveWindow('objects', 0, HEIGHT + 32)
+        # Extract foreground
+        foreground = None
+        for frame in frames:
+            foreground = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
 
-            if detection_countdown <= 0:
-                # Detection is over, time to extract/show the result.
-                detecting = False
-                extrapolated = cv2.inpaint(tracking, cv2.bitwise_not(mask), 3, cv2.INPAINT_TELEA)
+        # Smoothen a bit the mask to get back some of the missing pixels
+        mask = cv2.blur(cv2.bitwise_and(foreground, 255), BLUR)
+        ret, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
 
-                cv2.imshow('extrapolated', extrapolated)
-                cv2.moveWindow('extrapolated', WIDTH + 32, 0)
-                cv2.imwrite('/tmp/object.png', tracking)
-                cv2.imwrite('/tmp/inpainted.png', extrapolated)
+        color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+
+        cv2.imshow('tracking', mask)
+        cv2.moveWindow('tracking', WIDTH + 32, HEIGHT + 32)
+
+        tracking = cv2.bitwise_and(color_mask, current)
+        cv2.imshow('objects', tracking)
+        cv2.moveWindow('objects', 0, HEIGHT + 32)
+        cv2.imwrite('/tmp/object.png', tracking)
 
     # When everything done, release the capture
     cap.release()
