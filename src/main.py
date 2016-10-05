@@ -10,11 +10,13 @@ parser = argparse.ArgumentParser(description='Detect/compare objects being shake
 parser.add_argument('--source', help='Video to use (default: built-in cam)', default=0)
 parser.add_argument('--out-raw', help='Write raw captured video to this file (default: none)', default=None)
 parser.add_argument('--out-stabilized', help='Write stabilized video to this file (default: none)', default=None)
+parser.add_argument('--out-object-png', help='Write captured object to this file (default: none)', default=None)
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 5)', default=5, type=int)
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
 parser.add_argument('--autostart', help='Start processing immediately (default: False)', default=False, type=bool)
+parser.add_argument('--show', help='Display frames (default: True)', default=True, type=bool)
 args = vars(parser.parse_args())
 print ("Args: %s" % args)
 
@@ -55,8 +57,9 @@ def main():
             continue
 
         # Display the current frame
-        cv2.imshow('frame', current)
-        cv2.moveWindow('frame', 0, 0)
+        if args['show']:
+            cv2.imshow('frame', current)
+            cv2.moveWindow('frame', 0, 0)
 
         if idle:
             continue
@@ -82,13 +85,17 @@ def main():
 
         color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
-        cv2.imshow('tracking', mask)
-        cv2.moveWindow('tracking', args['width'] + 32, args['height'] + 32)
+        if args['show']:
+            cv2.imshow('tracking', mask)
+            cv2.moveWindow('tracking', args['width'] + 32, args['height'] + 32)
 
         tracking = cv2.bitwise_and(color_mask, current)
-        cv2.imshow('objects', tracking)
-        cv2.moveWindow('objects', 0, args['height'] + 32)
-        cv2.imwrite('/tmp/object.png', tracking)
+        if args['show']:
+            cv2.imshow('objects', tracking)
+            cv2.moveWindow('objects', 0, args['height'] + 32)
+
+        if args['out_object_png']:
+            cv2.imwrite(args['out_object_png'], tracking)
 
     # When everything done, release the capture
     cap.release()
@@ -131,7 +138,6 @@ def stabilize(frames):
         if raw_writer:
             raw_writer.write(cur)
         cur_gray = cv2.cvtColor(cur, cv2.COLOR_RGB2GRAY)
-        cv2.imshow('gray', prev_gray)
 
         prev_corner = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=.01, minDistance=10) # FIXME: What are these constants?
         if not (prev_corner is None):
