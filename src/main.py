@@ -1,38 +1,39 @@
 """Script to detect objects that are being shaken in front of the camera."""
-import cv2
+import argparse
 import math
-import numpy
 import sys
 
-WIDTH = 320
-HEIGHT = 200
-BLUR = (5, 5)
+import cv2
+import numpy
 
-# Number of frames during which to run detection. Divide by ~16 to obtain
-# a number of seconds.
-FRAMES_BUFFER_SIZE = 60
+parser = argparse.ArgumentParser(description='Detect/compare objects being shaken in front of the camera.')
+parser.add_argument('--source', help='Video to use (default: built-in cam)', default=0)
+parser.add_argument('--out-raw', help='Write raw captured video to this file (default: none)', default=None)
+parser.add_argument('--out-stabilized', help='Write stabilized video to this file (default: none)', default=None)
+parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
+parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
+parser.add_argument('--blur', help='Blur radius (default: 5)', default=5, type=int)
+parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
+parser.add_argument('--autostart', help='Start processing immediately (default: False)', default=False, type=bool)
+args = vars(parser.parse_args())
+print ("Args: %s" % args)
+
 
 def main():
-    """Main entry point for the script."""
-    source = 0
-    if len(sys.argv) >= 2:
-        source = sys.argv[1]
-    print("Lightouse 2 starting with source %s"  % source)
-
-    cap = cv2.VideoCapture(source)
+    cap = cv2.VideoCapture(args['source'])
     if cap is None or not cap.isOpened():
         print('Error: unable to open video source')
         return -1
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args['width'])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args['height'])
 
     backgroundSubstractor = cv2.createBackgroundSubtractorMOG2()
 
     idle = True
-    force_start = True
+    force_start = args['autostart']
 
-    # A buffer holding the frames. It will hold up to FRAMES_BUFFER_SIZE framesselfself.
+    # A buffer holding the frames. It will hold up to args['buffer'] framesselfself.
     frames = None
 
     while(True):
@@ -60,7 +61,7 @@ def main():
         if idle:
             continue
 
-        if len(frames) < FRAMES_BUFFER_SIZE:
+        if len(frames) < args['buffer']:
             # We are not done buffering.
             frames.append(current)
             continue
@@ -76,17 +77,17 @@ def main():
             foreground = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
 
         # Smoothen a bit the mask to get back some of the missing pixels
-        mask = cv2.blur(cv2.bitwise_and(foreground, 255), BLUR)
+        mask = cv2.blur(cv2.bitwise_and(foreground, 255), (args['blur'], args['blur']))
         ret, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
 
         color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
         cv2.imshow('tracking', mask)
-        cv2.moveWindow('tracking', WIDTH + 32, HEIGHT + 32)
+        cv2.moveWindow('tracking', args['width'] + 32, args['height'] + 32)
 
         tracking = cv2.bitwise_and(color_mask, current)
         cv2.imshow('objects', tracking)
-        cv2.moveWindow('objects', 0, HEIGHT + 32)
+        cv2.moveWindow('objects', 0, args['height'] + 32)
         cv2.imwrite('/tmp/object.png', tracking)
 
     # When everything done, release the capture
@@ -116,13 +117,19 @@ def stabilize(frames):
     prev = frames[0]
     prev_gray = cv2.cvtColor(prev, cv2.COLOR_RGB2GRAY)
 
-    debug_before_writer = cv2.VideoWriter("/tmp/debug_raw.avi", cv2.VideoWriter_fourcc(*"DIVX"), 16, (WIDTH, HEIGHT));
-    debug_after_writer = cv2.VideoWriter("/tmp/debug_stabilized.avi", cv2.VideoWriter_fourcc(*"DIVX"), 16, (WIDTH, HEIGHT));
+    raw_writer = None
+    stabilized_writer = None
+
+    if args['out_raw']:
+        raw_writer = cv2.VideoWriter(args['out_raw'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+    if args['out_stabilized']:
+        stabilized_writer = cv2.VideoWriter(args['out_stabilized'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
 
     # Stabilize image, most likely introducing borders.
     stabilized.append(prev)
     for cur in frames[1:]:
-        debug_before_writer.write(cur)
+        if raw_writer:
+            raw_writer.write(cur)
         cur_gray = cv2.cvtColor(cur, cv2.COLOR_RGB2GRAY)
         cv2.imshow('gray', prev_gray)
 
@@ -191,10 +198,11 @@ def stabilize(frames):
                     print("stabilize: padded transform\n %s" % padded_transform)
                     print("stabilize: full transform\n %s" % acc_transform)
                     print("stabilize: resized full transform\n %s" % numpy.round(acc_transform[0:2, :]))
-                    result = cv2.warpAffine(cur, numpy.round(acc_transform[0:2,:]), (WIDTH, HEIGHT), cv2.INTER_NEAREST)
+                    result = cv2.warpAffine(cur, numpy.round(acc_transform[0:2,:]), (args['width'], args['height']), cv2.INTER_NEAREST)
                 stabilized.append(result)
 
-                debug_after_writer.write(result)
+                if stabilized_writer:
+                    stabilized_writer.write(result)
         else:
             print("stabilize: could not find prev_corner, skipping frame")
 
