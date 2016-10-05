@@ -16,6 +16,7 @@ parser.add_argument('--height', help='Video height (default: 200)', default=200,
 parser.add_argument('--blur', help='Blur radius (default: 5)', default=5, type=int)
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
 parser.add_argument('--autostart', help='Start processing immediately (default: False)', default=False, type=bool)
+parser.add_argument('--autoexit', help='Quit once the process is complete (default: True)', default=True, type=bool)
 parser.add_argument('--show', help='Display frames (default: True)', default=True, type=bool)
 args = vars(parser.parse_args())
 print ("Args: %s" % args)
@@ -96,6 +97,9 @@ def main():
 
         if args['out_object_png']:
             cv2.imwrite(args['out_object_png'], tracking)
+
+        if args['autoexit']:
+            break
 
     # When everything done, release the capture
     cap.release()
