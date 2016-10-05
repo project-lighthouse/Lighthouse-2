@@ -15,9 +15,23 @@ parser.add_argument('--width', help='Video width (default: 320)', default=320, t
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 5)', default=5, type=int)
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
-parser.add_argument('--autostart', help='Start processing immediately (default: False)', default=False, type=bool)
-parser.add_argument('--autoexit', help='Quit once the process is complete (default: True)', default=True, type=bool)
-parser.add_argument('--show', help='Display frames (default: True)', default=True, type=bool)
+
+parser.add_argument('--autostart', help='Start processing immediately (default).', dest='autostart', action='store_true')
+parser.add_argument('--no-autostart', help='Do not start processing immediately.', dest='autostart', action='store_false')
+parser.set_defaults(autostart=True)
+
+parser.add_argument('--autoexit', help='Quit once the process is complete (default).', dest='autoexit', action='store_true')
+parser.add_argument('--no-autoexit', help='Do not quit once the process is complete.', dest='autoexit', action='store_false')
+parser.set_defaults(autoexit=True)
+
+parser.add_argument('--show', help='Display videos (default).', dest='show', action='store_true')
+parser.add_argument('--no-show', help='Do not display videos.', dest='show', action='store_false')
+parser.set_defaults(show=True)
+
+parser.add_argument('--stabilize', help='Stabilize image (default).', dest='stabilize', action='store_true')
+parser.add_argument('--no-stabilize', help='Do not stabilize image.', dest='stabilize', action='store_false')
+parser.set_defaults(stabilize=True)
+
 args = vars(parser.parse_args())
 print ("Args: %s" % args)
 
@@ -41,6 +55,8 @@ def main():
 
     while(True):
         # Capture frame-by-frame.
+        if not cap:
+            break
         ret, current = cap.read()
 
         key = cv2.waitKey(1) & 0xFF
@@ -53,27 +69,36 @@ def main():
             idle = False
             frames = []
 
-        if not ret:
-            # Somehow, we failed to capture the frame.
-            continue
+        if ret:
+            # Display the current frame
+            if args['show']:
+                cv2.imshow('frame', current)
+                cv2.moveWindow('frame', 0, 0)
 
-        # Display the current frame
-        if args['show']:
-            cv2.imshow('frame', current)
-            cv2.moveWindow('frame', 0, 0)
+            if idle:
+                # We are not capturing at the moment.
+                print("Idle, proceeding")
+                continue
 
-        if idle:
-            continue
+            if len(frames) < args['buffer'] and cap.isOpened():
+                # We are not done buffering.
+                print("Got %d/%d frames" % (len(frames), args['buffer']))
+                frames.append(current)
+                continue
 
-        if len(frames) < args['buffer']:
-            # We are not done buffering.
-            frames.append(current)
-            continue
-
-        # At this stage, we are done buffering. Stop recording, start processing.
+        # At this stage, we are done buffering, either because there are no more
+        # frames at hand or because we have enough frames. Stop recording, start
+        # processing.
         idle = True
 
-        frames = stabilize(frames)
+        if args['autoexit']:
+            cap.release()
+            cap = None
+
+        print("Capture complete, stabilizing")
+
+        if args['stabilize']:
+            frames = stabilize(frames)
 
         # Extract foreground
         foreground = None
@@ -90,7 +115,7 @@ def main():
             cv2.imshow('tracking', mask)
             cv2.moveWindow('tracking', args['width'] + 32, args['height'] + 32)
 
-        tracking = cv2.bitwise_and(color_mask, current)
+        tracking = cv2.bitwise_and(color_mask, frames[-2])
         if args['show']:
             cv2.imshow('objects', tracking)
             cv2.moveWindow('objects', 0, args['height'] + 32)
@@ -98,11 +123,12 @@ def main():
         if args['out_object_png']:
             cv2.imwrite(args['out_object_png'], tracking)
 
-        if args['autoexit']:
+        if cap and not cap.isOpened():
             break
 
     # When everything done, release the capture
-    cap.release()
+    if cap:
+        cap.release()
     cv2.destroyAllWindows()
     pass
 
