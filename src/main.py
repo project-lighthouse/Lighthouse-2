@@ -113,9 +113,9 @@ def main():
 
         mask = foreground
         if args['remove_shadows']:
-        # Smoothen a bit the mask to get back some of the missing pixels
             mask = cv2.bitwise_and(mask, 255)
 
+        # Smoothen a bit the mask to get back some of the missing pixels
         mask = cv2.blur(mask, (args['blur'], args['blur']))
         ret, mask = cv2.threshold(foreground, 1, 255, cv2.THRESH_BINARY)
 
