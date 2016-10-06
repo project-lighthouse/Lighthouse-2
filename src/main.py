@@ -8,9 +8,10 @@ import numpy
 
 parser = argparse.ArgumentParser(description='Detect/compare objects being shaken in front of the camera.')
 parser.add_argument('--source', help='Video to use (default: built-in cam)', default=0)
-parser.add_argument('--out-raw', help='Write raw captured video to this file (default: none)', default=None)
-parser.add_argument('--out-stabilized', help='Write stabilized video to this file (default: none)', default=None)
-parser.add_argument('--out-object-png', help='Write captured object to this file (default: none)', default=None)
+parser.add_argument('--dump-raw', help='Write raw captured video to this file (default: none)', default=None)
+parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
+parser.add_argument('--dump-object', help='Write captured object to this file (default: none)', default=None)
+parser.add_argument('--dump-mask', help='Write mask to this file (default: none)', default=None)
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 5)', default=5, type=int)
@@ -115,13 +116,16 @@ def main():
             cv2.imshow('tracking', mask)
             cv2.moveWindow('tracking', args['width'] + 32, args['height'] + 32)
 
+        if args['dump_mask']:
+            cv2.imwrite(args['dump_mask'], color_mask)
+
         tracking = cv2.bitwise_and(color_mask, frames[-2])
         if args['show']:
             cv2.imshow('objects', tracking)
             cv2.moveWindow('objects', 0, args['height'] + 32)
 
-        if args['out_object_png']:
-            cv2.imwrite(args['out_object_png'], tracking)
+        if args['dump_object']:
+            cv2.imwrite(args['dump_object'], tracking)
 
         if cap and not cap.isOpened():
             break
@@ -157,10 +161,10 @@ def stabilize(frames):
     raw_writer = None
     stabilized_writer = None
 
-    if args['out_raw']:
-        raw_writer = cv2.VideoWriter(args['out_raw'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
-    if args['out_stabilized']:
-        stabilized_writer = cv2.VideoWriter(args['out_stabilized'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+    if args['dump_raw']:
+        raw_writer = cv2.VideoWriter(args['dump_raw'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+    if args['dump_stabilized']:
+        stabilized_writer = cv2.VideoWriter(args['dump_stabilized'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
 
     # Stabilize image, most likely introducing borders.
     stabilized.append(prev)
