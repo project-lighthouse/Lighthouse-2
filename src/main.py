@@ -10,14 +10,16 @@ parser = argparse.ArgumentParser(description='Detect/compare objects being shake
 parser.add_argument('--source', help='Video to use (default: built-in cam)', default=0)
 parser.add_argument('--dump-raw', help='Write raw captured video to this file (default: none)', default=None)
 parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
-parser.add_argument('--dump-object', help='Write captured object to this file (default: none)', default=None)
-parser.add_argument('--dump-objects', help='Write all the objects noticed the video to this file (default: none)', default=None)
 parser.add_argument('--dump-mask', help='Write mask to this file (default: none)', default=None)
 parser.add_argument('--dump-masks', help='Write all the masks noticed the video to this file (default: none)', default=None)
+parser.add_argument('--dump-objects', help='Write all the objects noticed the video to this file (default: none)', default=None)
+
+parser.add_argument('--objects-prefix', help='Write captured objects to this destination (default: none).', default=None)
+parser.add_argument('--objects-number', help='Pick the N objects with the best score and capture them (default: 3).', default=3, type=int)
+
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
-
 parser.add_argument('--min-size', help='Assume that everything with fewer pixels is a parasite (default: 100).', default=100, type=int)
 
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
@@ -128,16 +130,7 @@ def main():
         if args['dump_objects']:
             extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
 
-        # The mask obtained by removing the background.
-        best_mask = None
-        best_bw_mask = None
-
-        # The object extracted from the video by removing the mask.
-        best_extracted = None
-
-        best_score = -1
-        latest_score = -1
-        best_index = -1
+        candidates = []
 
         print("Removing background.")
         for i, frame in enumerate(frames):
@@ -213,40 +206,38 @@ def main():
                 # We have captured the entire image. Definitely not a good thing to do.
                 if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
                     # We are done buffering
-                    if score > best_score:
-                        best_score = score
-                        best_mask = mask
-                        best_bw_mask = bw_mask
-                        best_extracted = extracted
-                        best_index = i
+                    candidates.append((score, mask, bw_mask, extracted, i))
 
             latest_score = score
 
-# Get rid of small components
-        if args['min_size'] > 0:
-            number, components = cv2.connectedComponents(best_bw_mask)
-            flattened = components.flatten()
-            stats = numpy.bincount(flattened)
-            # FIXME: Optimize this
-            removing = 0
-            for i, stat in enumerate(stats):
-                if stat == 0:
-                    continue
-                if stat < args['min_size']:
-                    print("Removing region %d (size: %d)" % (i, stat))
-                    kill_list = components == i
-                    best_mask[kill_list] = 0
-                    best_extracted[kill_list] = 0
-                    removing += 1
-                else:
-                    print("Keeping region %d (size: %d)" % (i, stat))
-            print ("Removed %d/%d regions" % (removing, number))
+        candidates.sort(key=lambda tuple: tuple[0], reverse=True)
+        candidates = candidates[:args['objects_number']]
 
-        print("Best result is %d, with score %d (latest: %d)." % (best_index, best_score, latest_score))
-        if args['dump_object']:
-            cv2.imwrite(args['dump_object'], best_extracted)
-        if args['dump_mask']:
-            cv2.imwrite(args['dump_mask'], best_mask)
+        for candidate_index, candidate in enumerate(candidates):
+            best_score, best_mask, best_bw_mask, best_extracted, best_index = candidate
+
+    # Get rid of small components
+            if args['min_size'] > 0:
+                number, components = cv2.connectedComponents(best_bw_mask)
+                flattened = components.flatten()
+                stats = numpy.bincount(flattened)
+                # FIXME: Optimize this
+                removing = 0
+                for i, stat in enumerate(stats):
+                    if stat == 0:
+                        continue
+                    if stat < args['min_size']:
+                        kill_list = components == i
+                        best_mask[kill_list] = 0
+                        best_extracted[kill_list] = 0
+                        removing += 1
+
+            if args['objects_prefix']:
+                dest = "%s_%d.png" % (args['objects_prefix'], candidate_index)
+                print("Writing object to %s." % dest)
+                cv2.imwrite(dest, best_extracted)
+            if args['dump_mask']:
+                cv2.imwrite(args['dump_mask'], best_mask)
 
         if cap and not cap.isOpened():
             break
