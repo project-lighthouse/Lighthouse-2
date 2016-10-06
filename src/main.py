@@ -14,7 +14,7 @@ parser.add_argument('--dump-object', help='Write captured object to this file (d
 parser.add_argument('--dump-mask', help='Write mask to this file (default: none)', default=None)
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
-parser.add_argument('--blur', help='Blur radius (default: 5)', default=5, type=int)
+parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
 
 parser.add_argument('--autostart', help='Start processing immediately (default).', dest='autostart', action='store_true')
@@ -32,6 +32,10 @@ parser.set_defaults(show=True)
 parser.add_argument('--stabilize', help='Stabilize image (default).', dest='stabilize', action='store_true')
 parser.add_argument('--no-stabilize', help='Do not stabilize image.', dest='stabilize', action='store_false')
 parser.set_defaults(stabilize=True)
+
+parser.add_argument('--remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
+parser.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
+parser.set_defaults(remove_shadows=False)
 
 args = vars(parser.parse_args())
 print ("Args: %s" % args)
@@ -96,9 +100,10 @@ def main():
             cap.release()
             cap = None
 
-        print("Capture complete, stabilizing")
+        print("Capture complete.")
 
         if args['stabilize']:
+            print("Stabilizing.")
             frames = stabilize(frames)
 
         # Extract foreground
@@ -106,9 +111,13 @@ def main():
         for frame in frames:
             foreground = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
 
+        mask = foreground
+        if args['remove_shadows']:
         # Smoothen a bit the mask to get back some of the missing pixels
-        mask = cv2.blur(cv2.bitwise_and(foreground, 255), (args['blur'], args['blur']))
-        ret, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+            mask = cv2.bitwise_and(mask, 255)
+
+        mask = cv2.blur(mask, (args['blur'], args['blur']))
+        ret, mask = cv2.threshold(foreground, 1, 255, cv2.THRESH_BINARY)
 
         color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
