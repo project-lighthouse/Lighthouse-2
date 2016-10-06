@@ -1,3 +1,4 @@
+import datetime
 import argparse
 import glob
 import cv2
@@ -10,11 +11,20 @@ parser.add_argument('--n-features', help='Number of features to extract from tem
                     type=int)
 parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
 parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
+parser.add_argument("--verbose", help="Increase output verbosity", action="store_true")
 args = vars(parser.parse_args())
+
+verbose = args["verbose"]
+
+if verbose:
+    print('Args parsed: {:%H:%M:%S}'.format(datetime.datetime.now()))
 
 # Load the image and convert it to grayscale.
 template = cv2.imread(args["template"])
 gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+if verbose:
+    print('Template loaded: {:%H:%M:%S}'.format(datetime.datetime.now()))
 
 # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
 detector = cv2.ORB_create(nfeatures=args["n_features"])
@@ -23,6 +33,9 @@ detector = cv2.ORB_create(nfeatures=args["n_features"])
 matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 
 (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
+
+if verbose:
+    print('Template\'s features are extracted: {:%H:%M:%S}'.format(datetime.datetime.now()))
 
 statistics = []
 
@@ -34,9 +47,18 @@ for image_path in glob.glob(args["images"] + "/*.jpg"):
     image = cv2.imread(image_path)
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+    if verbose:
+        print('{} image loaded: {:%H:%M:%S}'.format(image_path, datetime.datetime.now()))
+
     (image_keypoints, image_descriptors) = detector.detectAndCompute(gray_image, None)
 
+    if verbose:
+        print('{} image\'s features are extracted: {:%H:%M:%S}'.format(image_path, datetime.datetime.now()))
+
     matches = matcher.knnMatch(template_descriptors, image_descriptors, k=2)
+
+    if verbose:
+        print('{} image\'s match is processed: {:%H:%M:%S}'.format(image_path, datetime.datetime.now()))
 
     # Apply ratio test.
     good_matches = []
@@ -45,6 +67,9 @@ for image_path in glob.glob(args["images"] + "/*.jpg"):
             good_matches.append([m])
 
     statistics.append((image_path, image_keypoints, matches, good_matches, image))
+
+if verbose:
+    print('All images processed: {:%H:%M:%S}'.format(datetime.datetime.now()))
 
 statistics = sorted(statistics, key=lambda (v, w, x, y, z): len(y), reverse=True)
 
