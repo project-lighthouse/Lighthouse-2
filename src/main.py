@@ -134,9 +134,22 @@ def main():
 
         print("Removing background.")
         for i, frame in enumerate(frames):
+            height, width = frame.shape[:2]
+            surface = height * width
+            # FIXMEThere's probably a faster way to do this.
+            if i > 0:
+                diff = frame - frames[i - 1]
+                delta = 0
+                for y in range(height):
+                    for x in range(width):
+                        for chan in diff[y][x]:
+                            if chan != 0:
+                                delta += 1
+                                break
+
+                print("Delta: %f" % (delta/ surface))
+
             mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
-#            regions = backgroundSubstractor.getForegroundRegions()
-#            print("Regions: %s" % regions)
 
             if args['remove_shadows']:
                 mask = cv2.bitwise_and(mask, 255)
@@ -147,12 +160,11 @@ def main():
 
             ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
-            height, width = mask.shape[:2]
             corners = [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]
 
             score = cv2.countNonZero(mask)
             print("Starting with a score of %d" % score)
-            if args['fill_holes'] and score != height * width:
+            if args['fill_holes'] and score != surface:
                 # Attempt to fill any holes.
                 # At this stage, often, we have a mask surrounded by black and containing holes.
                 # (this is not always the case – sometimes, the mask is a cloud of points).
@@ -172,7 +184,7 @@ def main():
                     # our fill operation actually decreased the quality of the
                     # image.
                     filled_score = cv2.countNonZero(filled)
-                    if filled_score < height * width * .9:
+                    if filled_score < surface * .9:
                         has_empty_corners = False
                         for y, x in corners:
                             if filled[y, x] == 0:
@@ -202,7 +214,7 @@ def main():
             if extracted_writer:
                 extracted_writer.write(extracted)
 
-            if score != height * width:
+            if score != surface:
                 # We have captured the entire image. Definitely not a good thing to do.
                 if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
                     # We are done buffering
