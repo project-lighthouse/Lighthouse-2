@@ -21,6 +21,10 @@ parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
 parser.add_argument('--buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
+parser.add_argument('--fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
+parser.add_argument('--no-fill', help='Do not attempt to remove holes from the captured image (default).', dest='fill_holes', action='store_false')
+parser.set_defaults(fill_holes=False)
+
 parser.add_argument('--autostart', help='Start processing immediately (default).', dest='autostart', action='store_true')
 parser.add_argument('--no-autostart', help='Do not start processing immediately.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
@@ -142,10 +146,37 @@ def main():
                 mask = cv2.bitwise_and(mask, 255)
 
             # Smoothen a bit the mask to get back some of the missing pixels
-            mask = cv2.blur(mask, (args['blur'], args['blur']))
+            if args['blur'] > 0:
+                mask = cv2.blur(mask, (args['blur'], args['blur']))
+
             ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
+            height, width = mask.shape[:2]
+
             score = cv2.countNonZero(mask)
+            if args['fill_holes']:
+                # Attempt to fill any holes.
+                # At this stage, often, we have a mask surrounded by black and containing holes.
+                # (this is not always the case – sometimes, the mask is a cloud of points).
+                positive = mask.copy()
+                fill_mask = numpy.zeros((height + 2, width + 2), numpy.uint8)
+                found = False
+                for y,x in [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]:
+                    if positive[y, x] == 0:
+                        print("Flood filling from (%d, %d)" % (y, x))
+                        cv2.floodFill(positive, fill_mask, (x, y), 255)
+                        found = True
+                        break
+
+                if found:
+                    filled = cv2.bitwise_or(mask, cv2.bitwise_not(positive))
+                    filled_score = cv2.countNonZero(filled)
+                    if filled_score < height * width * .9:
+                        # Apparently, we have managed to remove holes.
+                        score = filled_score
+                        mask = filled
+
+
             mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
             if args['show']:
@@ -162,11 +193,15 @@ def main():
             if extracted_writer:
                 extracted_writer.write(extracted)
 
-            if (i > len(frames) * args['buffer_init'] or i + 1 == len(frames)) and score > best_score:
-                best_score = score
-                best_mask = mask
-                best_extracted = extracted
-                best_index = i
+            if score != height * width:
+                # We have captured the entire image. Definitely not a good thing to do.
+                if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
+                    # We are done buffering
+                    if score > best_score:
+                        best_score = score
+                        best_mask = mask
+                        best_extracted = extracted
+                        best_index = i
 
             latest_mask = mask
             latest_extracted = extracted
