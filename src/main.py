@@ -17,7 +17,9 @@ parser.add_argument('--dump-masks', help='Write all the masks noticed the video 
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
+
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
+parser.add_argument('--buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
 parser.add_argument('--autostart', help='Start processing immediately (default).', dest='autostart', action='store_true')
 parser.add_argument('--no-autostart', help='Do not start processing immediately.', dest='autostart', action='store_false')
@@ -40,6 +42,10 @@ parser.add_argument('--no-remove-shadows', help='Pixels that look like shadows s
 parser.set_defaults(remove_shadows=False)
 
 args = vars(parser.parse_args())
+if args['buffer_init'] <= 0:
+    args['buffer_init'] = .01
+elif args['buffer_init'] >= 1:
+    args['buffer_init'] = .99
 print ("Args: %s" % args)
 
 
@@ -117,13 +123,19 @@ def main():
             extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
 
         # The mask obtained by removing the background.
-        mask = None
+        latest_mask = None
+        best_mask = None
 
         # The object extracted from the video by removing the mask.
-        extracted = None
+        latest_extracted = None
+        best_extracted = None
+
+        best_score = -1
+        latest_score = -1
+        best_index = -1
 
         print("Removing background.")
-        for frame in frames:
+        for i, frame in enumerate(frames):
             mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
 
             if args['remove_shadows']:
@@ -133,6 +145,7 @@ def main():
             mask = cv2.blur(mask, (args['blur'], args['blur']))
             ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
+            score = cv2.countNonZero(mask)
             mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
             if args['show']:
@@ -149,11 +162,21 @@ def main():
             if extracted_writer:
                 extracted_writer.write(extracted)
 
-        print("Writing best result.")
+            if (i > len(frames) * args['buffer_init'] or i + 1 == len(frames)) and score > best_score:
+                best_score = score
+                best_mask = mask
+                best_extracted = extracted
+                best_index = i
+
+            latest_mask = mask
+            latest_extracted = extracted
+            latest_score = score
+
+        print("Best result is %d, with score %d (latest: %d)." % (best_index, best_score, latest_score))
         if args['dump_object']:
-            cv2.imwrite(args['dump_object'], extracted)
+            cv2.imwrite(args['dump_object'], best_extracted)
         if args['dump_mask']:
-            cv2.imwrite(args['dump_mask'], mask)
+            cv2.imwrite(args['dump_mask'], best_mask)
 
         if cap and not cap.isOpened():
             break
