@@ -152,6 +152,7 @@ def main():
             ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
             height, width = mask.shape[:2]
+            corners = [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]
 
             score = cv2.countNonZero(mask)
             if args['fill_holes']:
@@ -161,20 +162,30 @@ def main():
                 positive = mask.copy()
                 fill_mask = numpy.zeros((height + 2, width + 2), numpy.uint8)
                 found = False
-                for y,x in [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]:
+                for y,x in corners:
                     if positive[y, x] == 0:
-                        print("Flood filling from (%d, %d)" % (y, x))
                         cv2.floodFill(positive, fill_mask, (x, y), 255)
                         found = True
                         break
 
                 if found:
                     filled = cv2.bitwise_or(mask, cv2.bitwise_not(positive))
+
+                    # Check if we haven't filled too many things, in which case
+                    # our fill operation actually decreased the quality of the
+                    # image.
                     filled_score = cv2.countNonZero(filled)
                     if filled_score < height * width * .9:
-                        # Apparently, we have managed to remove holes.
-                        score = filled_score
-                        mask = filled
+                        has_empty_corners = False
+                        for y, x in corners:
+                            if filled[y, x] == 0:
+                                has_empty_corners = True
+                                break
+                        if has_empty_corners:
+                            # Apparently, we have managed to remove holes, without filling
+                            # the entire frame.
+                            score = filled_score
+                            mask = filled
 
 
             mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
