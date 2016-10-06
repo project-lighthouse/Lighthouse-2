@@ -18,6 +18,8 @@ parser.add_argument('--width', help='Video width (default: 320)', default=320, t
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
 
+parser.add_argument('--min-size', help='Assume that everything with fewer pixels is a parasite (default: 100).', default=100, type=int)
+
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
 parser.add_argument('--buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
@@ -62,7 +64,7 @@ def main():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args['width'])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args['height'])
 
-    backgroundSubstractor = cv2.createBackgroundSubtractorMOG2()
+    backgroundSubstractor = cv2.createBackgroundSubtractorKNN()
 
     idle = True
     force_start = args['autostart']
@@ -127,11 +129,10 @@ def main():
             extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
 
         # The mask obtained by removing the background.
-        latest_mask = None
         best_mask = None
+        best_bw_mask = None
 
         # The object extracted from the video by removing the mask.
-        latest_extracted = None
         best_extracted = None
 
         best_score = -1
@@ -141,6 +142,8 @@ def main():
         print("Removing background.")
         for i, frame in enumerate(frames):
             mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
+#            regions = backgroundSubstractor.getForegroundRegions()
+#            print("Regions: %s" % regions)
 
             if args['remove_shadows']:
                 mask = cv2.bitwise_and(mask, 255)
@@ -155,7 +158,8 @@ def main():
             corners = [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]
 
             score = cv2.countNonZero(mask)
-            if args['fill_holes']:
+            print("Starting with a score of %d" % score)
+            if args['fill_holes'] and score != height * width:
                 # Attempt to fill any holes.
                 # At this stage, often, we have a mask surrounded by black and containing holes.
                 # (this is not always the case – sometimes, the mask is a cloud of points).
@@ -186,8 +190,9 @@ def main():
                             # the entire frame.
                             score = filled_score
                             mask = filled
+                            print("Improved to a score of %d" % score)
 
-
+            bw_mask = mask
             mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
             if args['show']:
@@ -211,12 +216,31 @@ def main():
                     if score > best_score:
                         best_score = score
                         best_mask = mask
+                        best_bw_mask = bw_mask
                         best_extracted = extracted
                         best_index = i
 
-            latest_mask = mask
-            latest_extracted = extracted
             latest_score = score
+
+# Get rid of small components
+        if args['min_size'] > 0:
+            number, components = cv2.connectedComponents(best_bw_mask)
+            flattened = components.flatten()
+            stats = numpy.bincount(flattened)
+            # FIXME: Optimize this
+            removing = 0
+            for i, stat in enumerate(stats):
+                if stat == 0:
+                    continue
+                if stat < args['min_size']:
+                    print("Removing region %d (size: %d)" % (i, stat))
+                    kill_list = components == i
+                    best_mask[kill_list] = 0
+                    best_extracted[kill_list] = 0
+                    removing += 1
+                else:
+                    print("Keeping region %d (size: %d)" % (i, stat))
+            print ("Removed %d/%d regions" % (removing, number))
 
         print("Best result is %d, with score %d (latest: %d)." % (best_index, best_score, latest_score))
         if args['dump_object']:
