@@ -11,7 +11,9 @@ parser.add_argument('--source', help='Video to use (default: built-in cam)', def
 parser.add_argument('--dump-raw', help='Write raw captured video to this file (default: none)', default=None)
 parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
 parser.add_argument('--dump-object', help='Write captured object to this file (default: none)', default=None)
+parser.add_argument('--dump-objects', help='Write all the objects noticed the video to this file (default: none)', default=None)
 parser.add_argument('--dump-mask', help='Write mask to this file (default: none)', default=None)
+parser.add_argument('--dump-masks', help='Write all the masks noticed the video to this file (default: none)', default=None)
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
 parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
@@ -107,34 +109,51 @@ def main():
             frames = stabilize(frames)
 
         # Extract foreground
-        foreground = None
+        masks_writer = None
+        if args['dump_masks']:
+            masks_writer = cv2.VideoWriter(args['dump_masks'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+        extracted_writer = None
+        if args['dump_objects']:
+            extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+
+        # The mask obtained by removing the background.
+        mask = None
+
+        # The object extracted from the video by removing the mask.
+        extracted = None
+
+        print("Removing background.")
         for frame in frames:
-            foreground = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
+            mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
 
-        mask = foreground
-        if args['remove_shadows']:
-            mask = cv2.bitwise_and(mask, 255)
+            if args['remove_shadows']:
+                mask = cv2.bitwise_and(mask, 255)
 
-        # Smoothen a bit the mask to get back some of the missing pixels
-        mask = cv2.blur(mask, (args['blur'], args['blur']))
-        ret, mask = cv2.threshold(foreground, 1, 255, cv2.THRESH_BINARY)
+            # Smoothen a bit the mask to get back some of the missing pixels
+            mask = cv2.blur(mask, (args['blur'], args['blur']))
+            ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
-        color_mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+            mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
-        if args['show']:
-            cv2.imshow('tracking', mask)
-            cv2.moveWindow('tracking', args['width'] + 32, args['height'] + 32)
+            if args['show']:
+                cv2.imshow('mask', mask)
+                cv2.moveWindow('mask', args['width'] + 32, args['height'] + 32)
 
-        if args['dump_mask']:
-            cv2.imwrite(args['dump_mask'], color_mask)
+            if masks_writer:
+                masks_writer.write(mask)
 
-        tracking = cv2.bitwise_and(color_mask, frames[-2])
-        if args['show']:
-            cv2.imshow('objects', tracking)
-            cv2.moveWindow('objects', 0, args['height'] + 32)
+            extracted = cv2.bitwise_and(mask, frame)
+            if args['show']:
+                cv2.imshow('extracted', extracted)
+                cv2.moveWindow('extracted', 0, args['height'] + 32)
+            if extracted_writer:
+                extracted_writer.write(extracted)
 
+        print("Writing best result.")
         if args['dump_object']:
-            cv2.imwrite(args['dump_object'], tracking)
+            cv2.imwrite(args['dump_object'], extracted)
+        if args['dump_mask']:
+            cv2.imwrite(args['dump_mask'], mask)
 
         if cap and not cap.isOpened():
             break
