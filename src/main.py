@@ -22,7 +22,9 @@ parser.add_argument('--height', help='Video height (default: 200)', default=200,
 parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
 parser.add_argument('--min-size', help='Assume that everything with fewer pixels is a parasite (default: 100).', default=100, type=int)
 
-parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60)', default=60, type=int)
+parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60).', default=60, type=int)
+parser.add_argument('--buffer-stable-frames', help='Number of consecutive *stable* frames to capture before proceeding (default: 0).', default=0, type=int)
+parser.add_argument('--buffer-stability', help='Max proportion of the image that can change before we accept that a frame is stable (default: .1)', default=.1, type=float)
 parser.add_argument('--buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
 parser.add_argument('--fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
@@ -32,10 +34,6 @@ parser.set_defaults(fill_holes=False)
 parser.add_argument('--autostart', help='Start processing immediately (default).', dest='autostart', action='store_true')
 parser.add_argument('--no-autostart', help='Do not start processing immediately.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
-
-parser.add_argument('--autoexit', help='Quit once the process is complete (default).', dest='autoexit', action='store_true')
-parser.add_argument('--no-autoexit', help='Do not quit once the process is complete.', dest='autoexit', action='store_false')
-parser.set_defaults(autoexit=True)
 
 parser.add_argument('--show', help='Display videos (default).', dest='show', action='store_true')
 parser.add_argument('--no-show', help='Do not display videos.', dest='show', action='store_false')
@@ -48,10 +46,6 @@ parser.set_defaults(stabilize=True)
 parser.add_argument('--remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
 parser.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
 parser.set_defaults(remove_shadows=False)
-
-parser.add_argument('--compute-diff', help='Compute the %% of pixels changed between two frames.', dest='compute_diff', action='store_true')
-parser.add_argument('--no-compute-diff', help='Do not compute the %% of pixels changed between two frames (default).', dest='compute_diff', action='store_false')
-parser.set_defaults(compute_diff=False)
 
 args = vars(parser.parse_args())
 if args['buffer_init'] <= 0:
@@ -78,6 +72,10 @@ def main():
     # A buffer holding the frames. It will hold up to args['buffer'] framesselfself.
     frames = None
 
+    # The size of the largest suffix of `frames` composed solely of stable frames.
+    consecutive_stable_frames = 0
+    surface = args['width'] * args['height']
+
     while(True):
         # Capture frame-by-frame.
         if not cap:
@@ -93,172 +91,179 @@ def main():
             force_start = False
             idle = False
             frames = []
+            consecutive_stable_frames = 0
 
-        if ret:
-            # Display the current frame
-            if args['show']:
-                cv2.imshow('frame', current)
-                cv2.moveWindow('frame', 0, 0)
-
-            if idle:
-                # We are not capturing at the moment.
-                print("Idle, proceeding")
-                continue
-
-            if len(frames) < args['buffer'] and cap.isOpened():
-                # We are not done buffering.
-                print("Got %d/%d frames" % (len(frames), args['buffer']))
-                frames.append(current)
-                continue
-
-        # At this stage, we are done buffering, either because there are no more
-        # frames at hand or because we have enough frames. Stop recording, start
-        # processing.
-        idle = True
-
-        if args['autoexit']:
-            cap.release()
-            cap = None
-
-        print("Capture complete.")
-
-        if args['stabilize']:
-            print("Stabilizing.")
-            frames = stabilize(frames)
-
-        # Extract foreground
-        masks_writer = None
-        if args['dump_masks']:
-            masks_writer = cv2.VideoWriter(args['dump_masks'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
-        extracted_writer = None
-        if args['dump_objects']:
-            extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
-
-        candidates = []
-
-        print("Removing background.")
-        for i, frame in enumerate(frames):
-            height, width = frame.shape[:2]
-            surface = height * width
-            if args['compute_diff'] and i > 0:
-                # Fun fact: It's faster to substract, then convert colors, then
-                # count non-zeros than to do a Python loop.
-                diff = frame - frames[i - 1]
-                diff = cv2.cvtColor(diff, cv2.COLOR_RGB2GRAY)
-                delta = cv2.countNonZero(diff)
-
-                print("Delta: %f" % (delta/ surface))
-
-            mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
-
-            if args['remove_shadows']:
-                mask = cv2.bitwise_and(mask, 255)
-
-            # Smoothen a bit the mask to get back some of the missing pixels
-            if args['blur'] > 0:
-                mask = cv2.blur(mask, (args['blur'], args['blur']))
-
-            ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
-
-            corners = [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]
-
-            score = cv2.countNonZero(mask)
-            print("Starting with a score of %d" % score)
-            if args['fill_holes'] and score != surface:
-                # Attempt to fill any holes.
-                # At this stage, often, we have a mask surrounded by black and containing holes.
-                # (this is not always the case – sometimes, the mask is a cloud of points).
-                positive = mask.copy()
-                fill_mask = numpy.zeros((height + 2, width + 2), numpy.uint8)
-                found = False
-                for y,x in corners:
-                    if positive[y, x] == 0:
-                        cv2.floodFill(positive, fill_mask, (x, y), 255)
-                        found = True
-                        break
-
-                if found:
-                    filled = cv2.bitwise_or(mask, cv2.bitwise_not(positive))
-
-                    # Check if we haven't filled too many things, in which case
-                    # our fill operation actually decreased the quality of the
-                    # image.
-                    filled_score = cv2.countNonZero(filled)
-                    if filled_score < surface * .9:
-                        has_empty_corners = False
-                        for y, x in corners:
-                            if filled[y, x] == 0:
-                                has_empty_corners = True
-                                break
-                        if has_empty_corners:
-                            # Apparently, we have managed to remove holes, without filling
-                            # the entire frame.
-                            score = filled_score
-                            mask = filled
-                            print("Improved to a score of %d" % score)
-
-            bw_mask = mask
-            mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
-
-            if args['show']:
-                cv2.imshow('mask', mask)
-                cv2.moveWindow('mask', args['width'] + 32, args['height'] + 32)
-
-            if masks_writer:
-                masks_writer.write(mask)
-
-            extracted = cv2.bitwise_and(mask, frame)
-            if args['show']:
-                cv2.imshow('extracted', extracted)
-                cv2.moveWindow('extracted', 0, args['height'] + 32)
-            if extracted_writer:
-                extracted_writer.write(extracted)
-
-            if score != surface:
-                # We have captured the entire image. Definitely not a good thing to do.
-                if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
-                    # We are done buffering
-                    candidates.append((score, mask, bw_mask, extracted, i))
-
-            latest_score = score
-
-        candidates.sort(key=lambda tuple: tuple[0], reverse=True)
-        candidates = candidates[:args['objects_number']]
-
-        for candidate_index, candidate in enumerate(candidates):
-            best_score, best_mask, best_bw_mask, best_extracted, best_index = candidate
-
-    # Get rid of small components
-            if args['min_size'] > 0:
-                number, components = cv2.connectedComponents(best_bw_mask)
-                flattened = components.flatten()
-                stats = numpy.bincount(flattened)
-                # FIXME: Optimize this
-                removing = 0
-                for i, stat in enumerate(stats):
-                    if stat == 0:
-                        continue
-                    if stat < args['min_size']:
-                        kill_list = components == i
-                        best_mask[kill_list] = 0
-                        best_extracted[kill_list] = 0
-                        removing += 1
-
-            if args['objects_prefix']:
-                dest = "%s_%d.png" % (args['objects_prefix'], candidate_index)
-                print("Writing object to %s." % dest)
-                cv2.imwrite(dest, best_extracted)
-            if args['dump_mask']:
-                cv2.imwrite(args['dump_mask'], best_mask)
-
-        if cap and not cap.isOpened():
+        if not ret:
+            print("No more frames.")
             break
 
-    # When everything done, release the capture
-    if cap:
-        cap.release()
+        # Display the current frame
+        if args['show']:
+            cv2.imshow('frame', current)
+            cv2.moveWindow('frame', 0, 0)
+
+        if idle:
+            # We are not capturing at the moment.
+            print("Idle, proceeding.")
+            continue
+
+        if not cap.isOpened():
+            print("Video source closed.")
+            break
+
+        if len(frames) > 0 and args['buffer_stable_frames'] > 0:
+            diff = compute_diff(frames[-1], current)
+            print("Diff: %d <? %d" % (diff, surface * args['buffer_stability']))
+            if diff <= surface * args['buffer_stability']:
+                consecutive_stable_frames += 1
+            else:
+                consecutive_stable_frames = 0
+
+        # We are not done buffering.
+        print("Got %d/%d frames, %d/%d stable frames." % (len(frames), args['buffer'], consecutive_stable_frames, args['buffer_stable_frames']))
+        frames.append(current)
+
+        if len(frames) >= args['buffer']:
+            if consecutive_stable_frames >= args['buffer_stable_frames']:
+                # We have enough frames and enough stable frames.
+                print("We have enough stable frames.")
+                break
+            else:
+                # Make way for more frames.
+                frames.pop(0)
+        print("Continuing capture.")
+
+    print("Capture complete.")
+
+    # At this stage, we are done buffering, either because there are no more
+    # frames at hand or because we have enough frames. Stop recording, start
+    # processing.
+    cap.release()
+    cap = None
+
+
+    if args['stabilize']:
+        print("Stabilizing.")
+        frames = stabilize(frames)
+
+    # Extract foreground
+    masks_writer = None
+    if args['dump_masks']:
+        masks_writer = cv2.VideoWriter(args['dump_masks'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+    extracted_writer = None
+    if args['dump_objects']:
+        extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+
+    candidates = []
+
+    print("Removing background.")
+    for i, frame in enumerate(frames):
+        height, width = frame.shape[:2]
+
+        mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
+
+        if args['remove_shadows']:
+            mask = cv2.bitwise_and(mask, 255)
+
+        # Smoothen a bit the mask to get back some of the missing pixels
+        if args['blur'] > 0:
+            mask = cv2.blur(mask, (args['blur'], args['blur']))
+
+        ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
+
+        corners = [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]
+
+        score = cv2.countNonZero(mask)
+        print("Starting with a score of %d" % score)
+        if args['fill_holes'] and score != surface:
+            # Attempt to fill any holes.
+            # At this stage, often, we have a mask surrounded by black and containing holes.
+            # (this is not always the case – sometimes, the mask is a cloud of points).
+            positive = mask.copy()
+            fill_mask = numpy.zeros((height + 2, width + 2), numpy.uint8)
+            found = False
+            for y,x in corners:
+                if positive[y, x] == 0:
+                    cv2.floodFill(positive, fill_mask, (x, y), 255)
+                    found = True
+                    break
+
+            if found:
+                filled = cv2.bitwise_or(mask, cv2.bitwise_not(positive))
+
+                # Check if we haven't filled too many things, in which case
+                # our fill operation actually decreased the quality of the
+                # image.
+                filled_score = cv2.countNonZero(filled)
+                if filled_score < surface * .9:
+                    has_empty_corners = False
+                    for y, x in corners:
+                        if filled[y, x] == 0:
+                            has_empty_corners = True
+                            break
+                    if has_empty_corners:
+                        # Apparently, we have managed to remove holes, without filling
+                        # the entire frame.
+                        score = filled_score
+                        mask = filled
+                        print("Improved to a score of %d" % score)
+
+        bw_mask = mask
+        mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
+
+        if args['show']:
+            cv2.imshow('mask', mask)
+            cv2.moveWindow('mask', args['width'] + 32, args['height'] + 32)
+
+        if masks_writer:
+            masks_writer.write(mask)
+
+        extracted = cv2.bitwise_and(mask, frame)
+        if args['show']:
+            cv2.imshow('extracted', extracted)
+            cv2.moveWindow('extracted', 0, args['height'] + 32)
+        if extracted_writer:
+            extracted_writer.write(extracted)
+
+        if score != surface:
+            # We have captured the entire image. Definitely not a good thing to do.
+            if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
+                # We are done buffering
+                candidates.append((score, mask, bw_mask, extracted, i))
+
+        latest_score = score
+
+    candidates.sort(key=lambda tuple: tuple[0], reverse=True)
+    candidates = candidates[:args['objects_number']]
+
+    for candidate_index, candidate in enumerate(candidates):
+        best_score, best_mask, best_bw_mask, best_extracted, best_index = candidate
+
+# Get rid of small components
+        if args['min_size'] > 0:
+            number, components = cv2.connectedComponents(best_bw_mask)
+            flattened = components.flatten()
+            stats = numpy.bincount(flattened)
+            # FIXME: Optimize this
+            removing = 0
+            for i, stat in enumerate(stats):
+                if stat == 0:
+                    continue
+                if stat < args['min_size']:
+                    kill_list = components == i
+                    best_mask[kill_list] = 0
+                    best_extracted[kill_list] = 0
+                    removing += 1
+
+        if args['objects_prefix']:
+            dest = "%s_%d.png" % (args['objects_prefix'], candidate_index)
+            print("Writing object to %s." % dest)
+            cv2.imwrite(dest, best_extracted)
+        if args['dump_mask']:
+            cv2.imwrite(args['dump_mask'], best_mask)
+
     cv2.destroyAllWindows()
-    pass
+
 
 def stabilize(frames):
     # Accumulated frame transforms.
@@ -381,6 +386,13 @@ def stabilize(frames):
         # FIXME: Actually crop
 
     return cropped
+
+def compute_diff(a, b):
+    """Compute the number of pixels different in a and b"""
+    # Fun fact: It's faster to substract, then convert colors, then
+    # count non-zeros than to do a Python loop.
+    return cv2.norm(a, b)
+
 
 if __name__ == '__main__':
     sys.exit(main())
