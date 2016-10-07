@@ -85,7 +85,8 @@ for image_path in glob.glob(args["images"] + "/*.jpg"):
 if verbose:
     print('All images processed: {:%H:%M:%S}'.format(datetime.datetime.now()))
 
-statistics = sorted(statistics, key=lambda (u, v, w, x, y, z): len(x), reverse=True)
+# Sort by the largest number of "good" matches (4th element (zero based index = 3) of the tuple).
+statistics = sorted(statistics, key=lambda arguments: len(arguments[3]), reverse=True)
 
 number_of_matches = args["n_matches"]
 
