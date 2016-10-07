@@ -49,6 +49,10 @@ parser.add_argument('--remove-shadows', help='Pixels that look like shadows shou
 parser.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
 parser.set_defaults(remove_shadows=False)
 
+parser.add_argument('--compute-diff', help='Compute the %% of pixels changed between two frames.', dest='compute_diff', action='store_true')
+parser.add_argument('--no-compute-diff', help='Do not compute the %% of pixels changed between two frames (default).', dest='compute_diff', action='store_false')
+parser.set_defaults(compute_diff=False)
+
 args = vars(parser.parse_args())
 if args['buffer_init'] <= 0:
     args['buffer_init'] = .01
@@ -136,8 +140,8 @@ def main():
         for i, frame in enumerate(frames):
             height, width = frame.shape[:2]
             surface = height * width
-            # FIXMEThere's probably a faster way to do this.
-            if i > 0:
+            if args['compute_diff'] and i > 0:
+                # FIXME There's probably a faster way to do this.
                 diff = frame - frames[i - 1]
                 delta = 0
                 for y in range(height):
