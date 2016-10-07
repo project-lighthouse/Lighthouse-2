@@ -11,7 +11,7 @@ parser.add_argument('--n-features', help='Number of features to extract from tem
                     type=int)
 parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
 parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
-parser.add_argument("--verbose", help="Increase output verbosity", action="store_true")
+parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
 args = vars(parser.parse_args())
 
 verbose = args["verbose"]
@@ -24,7 +24,13 @@ template = cv2.imread(args["template"])
 gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
 if verbose:
-    print('Template loaded: {:%H:%M:%S}'.format(datetime.datetime.now()))
+    print('Template loaded: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+
+template_histogram = cv2.calcHist([template], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+template_histogram = cv2.normalize(template_histogram, template_histogram).flatten()
+
+if verbose:
+    print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
 # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
 detector = cv2.ORB_create(nfeatures=args["n_features"])
@@ -66,16 +72,24 @@ for image_path in glob.glob(args["images"] + "/*.jpg"):
         if m.distance < ratio_test_coefficient * n.distance:
             good_matches.append([m])
 
-    statistics.append((image_path, image_keypoints, matches, good_matches, image))
+    image_histogram = cv2.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+    image_histogram = cv2.normalize(image_histogram, image_histogram).flatten()
+
+    if verbose:
+        print('{} image\'s histogram calculated: {:%H:%M:%S.%f}'.format(image_path, datetime.datetime.now()))
+
+    histogram_comparison_result = cv2.compareHist(template_histogram, image_histogram, cv2.HISTCMP_CORREL)
+
+    statistics.append((image_path, image_keypoints, matches, good_matches, image, histogram_comparison_result))
 
 if verbose:
     print('All images processed: {:%H:%M:%S}'.format(datetime.datetime.now()))
 
-statistics = sorted(statistics, key=lambda (v, w, x, y, z): len(y), reverse=True)
+statistics = sorted(statistics, key=lambda (u, v, w, x, y, z): len(x), reverse=True)
 
 number_of_matches = args["n_matches"]
 
-for idx, (path, keypoints, matches, good_matches, image) in enumerate(statistics):
+for idx, (path, keypoints, matches, good_matches, image, histogram_comparison_result) in enumerate(statistics):
     # Display only `n-matches` first matches.
     if idx < number_of_matches:
         result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None, flags=2)
@@ -83,6 +97,6 @@ for idx, (path, keypoints, matches, good_matches, image) in enumerate(statistics
         color = '\033[92m'
     else:
         color = '\033[91m'
-    print("{}{}: {} - {}\033[0m".format(color, path, len(matches), len(good_matches)))
+    print("{}{}: {} - {} - {}\033[0m".format(color, path, len(matches), len(good_matches), histogram_comparison_result))
 
 cv2.waitKey(0)
