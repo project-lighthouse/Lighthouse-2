@@ -141,15 +141,11 @@ def main():
             height, width = frame.shape[:2]
             surface = height * width
             if args['compute_diff'] and i > 0:
-                # FIXME There's probably a faster way to do this.
+                # Fun fact: It's faster to substract, then convert colors, then
+                # count non-zeros than to do a Python loop.
                 diff = frame - frames[i - 1]
-                delta = 0
-                for y in range(height):
-                    for x in range(width):
-                        for chan in diff[y][x]:
-                            if chan != 0:
-                                delta += 1
-                                break
+                diff = cv2.cvtColor(diff, cv2.COLOR_RGB2GRAY)
+                delta = cv2.countNonZero(diff)
 
                 print("Delta: %f" % (delta/ surface))
 
