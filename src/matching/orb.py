@@ -17,7 +17,7 @@ args = vars(parser.parse_args())
 verbose = args["verbose"]
 
 if verbose:
-    print('Args parsed: {:%H:%M:%S}'.format(datetime.datetime.now()))
+    print('Args parsed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
 # Load the image and convert it to grayscale.
 template = cv2.imread(args["template"])
@@ -41,7 +41,7 @@ matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
 
 if verbose:
-    print('Template\'s features are extracted: {:%H:%M:%S}'.format(datetime.datetime.now()))
+    print('Template\'s features are extracted: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
 statistics = []
 
@@ -54,12 +54,12 @@ for image_path in glob.glob(args["images"] + "/*.jpg"):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     if verbose:
-        print('{} image loaded: {:%H:%M:%S}'.format(image_path, datetime.datetime.now()))
+        print('{} image loaded: {:%H:%M:%S.%f}'.format(image_path, datetime.datetime.now()))
 
     (image_keypoints, image_descriptors) = detector.detectAndCompute(gray_image, None)
 
     if verbose:
-        print('{} image\'s features are extracted: {:%H:%M:%S}'.format(image_path, datetime.datetime.now()))
+        print('{} image\'s features are extracted: {:%H:%M:%S.%f}'.format(image_path, datetime.datetime.now()))
 
     matches = matcher.knnMatch(template_descriptors, image_descriptors, k=2)
 
@@ -76,14 +76,18 @@ for image_path in glob.glob(args["images"] + "/*.jpg"):
     image_histogram = cv2.normalize(image_histogram, image_histogram).flatten()
 
     if verbose:
-        print('{} image\'s histogram calculated: {:%H:%M:%S.%f}'.format(image_path, datetime.datetime.now()))
+        print('{} image\'s histogram is calculated: {:%H:%M:%S.%f}'.format(image_path, datetime.datetime.now()))
 
     histogram_comparison_result = cv2.compareHist(template_histogram, image_histogram, cv2.HISTCMP_CORREL)
+
+    if verbose:
+        print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(image_path,
+                                                                                      datetime.datetime.now()))
 
     statistics.append((image_path, image_keypoints, matches, good_matches, image, histogram_comparison_result))
 
 if verbose:
-    print('All images processed: {:%H:%M:%S}'.format(datetime.datetime.now()))
+    print('All images have been processed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
 # Sort by the largest number of "good" matches (4th element (zero based index = 3) of the tuple).
 statistics = sorted(statistics, key=lambda arguments: len(arguments[3]), reverse=True)
