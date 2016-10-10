@@ -10,12 +10,10 @@ parser = argparse.ArgumentParser(description='Detect/compare objects being shake
 parser.add_argument('--source', help='Video to use (default: built-in cam)', default=0)
 parser.add_argument('--dump-raw', help='Write raw captured video to this file (default: none)', default=None)
 parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
-parser.add_argument('--dump-mask', help='Write mask to this file (default: none)', default=None)
-parser.add_argument('--dump-masks', help='Write all the masks noticed the video to this file (default: none)', default=None)
-parser.add_argument('--dump-objects', help='Write all the objects noticed the video to this file (default: none)', default=None)
 
 parser.add_argument('--objects-prefix', help='Write captured objects to this destination (default: none).', default=None)
-parser.add_argument('--objects-number', help='Pick the N objects with the best score and capture them (default: 3).', default=3, type=int)
+parser.add_argument('--masks-prefix', help='Write captured masks (before preprocessing) to this destination (default: none).', default=None)
+parser.add_argument('--keep', help='Keep the N objects with the best score and capture them (default: 3).', default=3, type=int)
 
 parser.add_argument('--width', help='Video width (default: 320)', default=320, type=int)
 parser.add_argument('--height', help='Video height (default: 200)', default=200, type=int)
@@ -154,13 +152,6 @@ def main():
         frames = stabilize(frames)
 
     # Extract foreground
-    masks_writer = None
-    if args['dump_masks']:
-        masks_writer = cv2.VideoWriter(args['dump_masks'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
-    extracted_writer = None
-    if args['dump_objects']:
-        extracted_writer = cv2.VideoWriter(args['dump_objects'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
-
     candidates = []
 
     print("Removing background.")
@@ -168,6 +159,7 @@ def main():
         height, width = frame.shape[:2]
 
         mask = backgroundSubstractor.apply(frame) # FIXME: Is this the right subtraction?
+        original_mask = mask.copy()
 
         if args['remove_shadows']:
             mask = cv2.bitwise_and(mask, 255)
@@ -222,29 +214,24 @@ def main():
             cv2.imshow('mask', mask)
             cv2.moveWindow('mask', args['width'] + 32, args['height'] + 32)
 
-        if masks_writer:
-            masks_writer.write(mask)
-
         extracted = cv2.bitwise_and(mask, frame)
         if args['show']:
             cv2.imshow('extracted', extracted)
             cv2.moveWindow('extracted', 0, args['height'] + 32)
-        if extracted_writer:
-            extracted_writer.write(extracted)
 
         if score != surface:
             # We have captured the entire image. Definitely not a good thing to do.
             if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
                 # We are done buffering
-                candidates.append((score, mask, bw_mask, extracted, i))
+                candidates.append((score, mask, bw_mask, original_mask, extracted, i))
 
         latest_score = score
 
     candidates.sort(key=lambda tuple: tuple[0], reverse=True)
-    candidates = candidates[:args['objects_number']]
+    candidates = candidates[:args['keep']]
 
     for candidate_index, candidate in enumerate(candidates):
-        best_score, best_mask, best_bw_mask, best_extracted, best_index = candidate
+        best_score, best_mask, best_bw_mask, best_original_mask, best_extracted, best_index = candidate
 
         print ("Best score %d" % best_score)
 
@@ -268,8 +255,10 @@ def main():
             dest = "%s_%d.png" % (args['objects_prefix'], candidate_index)
             print("Writing object to %s." % dest)
             cv2.imwrite(dest, best_extracted)
-        if args['dump_mask']:
-            cv2.imwrite(args['dump_mask'], best_mask)
+        if args['masks_prefix']:
+            dest = "%s_%d.png" % (args['masks_prefix'], candidate_index)
+            print("Writing mask to %s." % dest)
+            cv2.imwrite(dest, best_original_mask)
 
     cv2.destroyAllWindows()
 
