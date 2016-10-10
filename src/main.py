@@ -76,6 +76,10 @@ def main():
     consecutive_stable_frames = 0
     surface = args['width'] * args['height']
 
+    raw_writer = None
+    if args['dump_raw']:
+        raw_writer = cv2.VideoWriter(args['dump_raw'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
+
     while(True):
         # Capture frame-by-frame.
         if not cap:
@@ -101,6 +105,9 @@ def main():
         if args['show']:
             cv2.imshow('frame', current)
             cv2.moveWindow('frame', 0, 0)
+
+        if raw_writer:
+            raw_writer.write(current)
 
         if idle:
             # We are not capturing at the moment.
@@ -239,6 +246,8 @@ def main():
     for candidate_index, candidate in enumerate(candidates):
         best_score, best_mask, best_bw_mask, best_extracted, best_index = candidate
 
+        print ("Best score %d" % best_score)
+
 # Get rid of small components
         if args['min_size'] > 0:
             number, components = cv2.connectedComponents(best_bw_mask)
@@ -287,19 +296,14 @@ def stabilize(frames):
     prev = frames[0]
     prev_gray = cv2.cvtColor(prev, cv2.COLOR_RGB2GRAY)
 
-    raw_writer = None
     stabilized_writer = None
 
-    if args['dump_raw']:
-        raw_writer = cv2.VideoWriter(args['dump_raw'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
     if args['dump_stabilized']:
         stabilized_writer = cv2.VideoWriter(args['dump_stabilized'], cv2.VideoWriter_fourcc(*"DIVX"), 16, (args['width'], args['height']));
 
     # Stabilize image, most likely introducing borders.
     stabilized.append(prev)
     for cur in frames[1:]:
-        if raw_writer:
-            raw_writer.write(cur)
         cur_gray = cv2.cvtColor(cur, cv2.COLOR_RGB2GRAY)
 
         prev_corner = cv2.goodFeaturesToTrack(prev_gray, maxCorners=200, qualityLevel=.01, minDistance=10) # FIXME: What are these constants?
