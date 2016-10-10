@@ -93,14 +93,20 @@ statistics = sorted(statistics, key=lambda arguments: len(arguments[2]), reverse
 number_of_matches = args["n_matches"]
 
 for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(statistics):
-    # Display only `n-matches` first matches.
-    if idx < number_of_matches:
-        #result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None, flags=2)
-        # cv2.imshow("Best match #" + str(idx + 1), result_image)
-        color = '\033[92m'
-    else:
-        color = '\033[91m'
-    print("{}{}: {} - {} - {}\033[0m".format(color, description.key, len(matches), len(good_matches),
-                                             histogram_comparison_result))
+    # Mark in green only `n-matches` first matches.
+    print("{}{}: {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m', description.key,
+                                             len(matches), len(good_matches), histogram_comparison_result))
+
+if args["data"] is not None:
+    print('\033[93m Warning: Displaying of images side-by-side only works if "{}" is based on existing image files and '
+          'created with the same --n-features={}! \033[0m'.format(args["data"], args["n_features"]))
+
+for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(statistics[:number_of_matches]):
+    image = cv2.imread(description.key)
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    keypoints = detector.detect(gray_image)
+
+    result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None, flags=2)
+    cv2.imshow("Best match #" + str(idx + 1), result_image)
 
 cv2.waitKey(0)
