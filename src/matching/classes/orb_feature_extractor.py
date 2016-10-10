@@ -79,8 +79,8 @@ class OrbFeatureExtractor:
                                                                                   datetime.datetime.now()))
             image_descriptions.append(
                 ImageDescription(serialized_image_description['key'],
-                                 numpy.array(serialized_image_description['descriptors']),
-                                 numpy.array(serialized_image_description['histogram'])))
+                                 numpy.array(serialized_image_description['descriptors'], dtype=numpy.uint8),
+                                 numpy.array(serialized_image_description['histogram'], dtype=numpy.float32)))
         if self.verbose:
             print('All descriptions deserialized: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
