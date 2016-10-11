@@ -7,13 +7,17 @@ import numpy
 from .image_description import ImageDescription
 
 
-class OrbFeatureExtractor:
+class FeatureExtractor:
     def __init__(self, verbose):
         self.verbose = verbose
 
-    def extract(self, image_set_path, number_of_features):
-        # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
-        detector = cv2.ORB_create(nfeatures=number_of_features)
+    def extract(self, image_set_path, detector_type, options):
+        if detector_type == 'orb':
+            # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the
+            # image.
+            detector = cv2.ORB_create(nfeatures=options['orb_n_features'])
+        else:
+            detector = cv2.AKAZE_create(descriptor_channels=options['akaze_n_channels'])
 
         image_descriptions = []
 

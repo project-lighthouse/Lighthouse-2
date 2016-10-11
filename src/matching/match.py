@@ -3,7 +3,7 @@ import cv2
 import datetime
 import time
 
-from classes.orb_feature_extractor import OrbFeatureExtractor
+from classes.feature_extractor import FeatureExtractor
 
 FLANN_INDEX_LSH = 6
 
@@ -16,13 +16,18 @@ parser.add_argument('-t', '--template', required=True, help='Path to the image w
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
-
-parser.add_argument('--n-features', help='Number of features to extract from template (default: 2000)', default=2000,
-                    type=int)
-parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
-parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
+parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze'],
+                    default='orb')
 parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
                     default='brute-force')
+parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
+parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
+parser.add_argument('--orb-n-features',
+                    help='Number of features to extract from every image when ORB detector is used (default: 2000)',
+                    default=2000, type=int)
+parser.add_argument('--akaze-n-channels',
+                    help='Number of channels in the descriptor when AKAZE detector is used (default: 3)',
+                    choices=[1, 2, 3], default=3, type=int)
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
 parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
 args = vars(parser.parse_args())
@@ -47,8 +52,13 @@ template_histogram = cv2.normalize(template_histogram, template_histogram).flatt
 if verbose:
     print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-# Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
-detector = cv2.ORB_create(nfeatures=args["n_features"])
+detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'])
+
+if args['detector'] == 'orb':
+    # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
+    detector = cv2.ORB_create(nfeatures=detector_options['orb_n_features'])
+else:
+    detector = cv2.AKAZE_create(descriptor_channels=detector_options['akaze_n_channels'])
 
 if args['matcher'] == 'brute-force':
     # Create Brute Force matcher.
@@ -69,12 +79,12 @@ statistics = []
 
 ratio_test_coefficient = args["ratio_test_k"]
 
-feature_extractor = OrbFeatureExtractor(verbose)
+feature_extractor = FeatureExtractor(verbose)
 
 extraction_start = time.time()
 
 if args["images"] is not None:
-    image_descriptions = feature_extractor.extract(args["images"], args["n_features"])
+    image_descriptions = feature_extractor.extract(args["images"], args['detector'], detector_options)
 else:
     image_descriptions = feature_extractor.deserialize(args["data"])
 
@@ -82,20 +92,21 @@ print("\033[94mTraining set has been prepared in %s seconds.\033[0m" % (time.tim
 
 # loop over the images to find the template in
 for image_description in image_descriptions:
-    matches = matcher.knnMatch(template_descriptors, image_description.descriptors, k=2)
+    matches = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
 
     if verbose:
         print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(image_description.key, datetime.datetime.now()))
 
     # Apply ratio test.
     good_matches = []
-    for m, n in matches:
-        if m.distance < ratio_test_coefficient * n.distance:
-            good_matches.append([m])
+    for m in matches:
+        if len(m) == 2 and m[0].distance < ratio_test_coefficient * m[1].distance:
+            good_matches.append([m[0]])
 
     if verbose:
         print('{} good matches filtered ({} good matches): {:%H:%M:%S.%f}'.format(image_description.key,
-                                                                                  len(good_matches),                                                                          datetime.datetime.now()))
+                                                                                  len(good_matches),
+                                                                                  datetime.datetime.now()))
 
     histogram_comparison_result = cv2.compareHist(template_histogram, image_description.histogram, cv2.HISTCMP_CORREL)
 
@@ -125,7 +136,8 @@ for idx, (description, matches, good_matches, histogram_comparison_result) in en
 if not args["no_ui"]:
     if args["data"] is not None:
         print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image files '
-              'and created with the same --n-features={}!\033[0m'.format(args["data"], args["n_features"]))
+              'and created with the same options '
+              '(--orb-n-features, --akaze-n-channels etc.)!\033[0m'.format(args["data"]))
 
     for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(
             statistics[:number_of_matches]):
