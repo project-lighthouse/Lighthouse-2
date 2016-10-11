@@ -5,6 +5,7 @@ import time
 
 from classes.feature_extractor import FeatureExtractor
 
+FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
 
 start = time.time()
@@ -16,18 +17,19 @@ parser.add_argument('-t', '--template', required=True, help='Path to the image w
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
-parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze'],
+parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
                     default='orb')
 parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
                     default='brute-force')
 parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
 parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
-parser.add_argument('--orb-n-features',
-                    help='Number of features to extract from every image when ORB detector is used (default: 2000)',
+parser.add_argument('--orb-n-features', help='Number of features to extract used in ORB detector (default: 2000)',
                     default=2000, type=int)
-parser.add_argument('--akaze-n-channels',
-                    help='Number of channels in the descriptor when AKAZE detector is used (default: 3)',
+parser.add_argument('--akaze-n-channels', help='Number of channels used in AKAZE detector (default: 3)',
                     choices=[1, 2, 3], default=3, type=int)
+parser.add_argument('--surf-threshold',
+                    help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)',
+                    default=1000, type=int)
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
 parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
 args = vars(parser.parse_args())
@@ -52,20 +54,30 @@ template_histogram = cv2.normalize(template_histogram, template_histogram).flatt
 if verbose:
     print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'])
+detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
+                        surf_threshold=args['surf_threshold'])
 
 if args['detector'] == 'orb':
     # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
     detector = cv2.ORB_create(nfeatures=detector_options['orb_n_features'])
-else:
+    norm = cv2.NORM_HAMMING
+elif args['detector'] == 'akaze':
     detector = cv2.AKAZE_create(descriptor_channels=detector_options['akaze_n_channels'])
+    norm = cv2.NORM_HAMMING
+else:
+    detector = cv2.xfeatures2d.SURF_create(hessianThreshold=detector_options['surf_threshold'])
+    norm = cv2.NORM_L2
 
 if args['matcher'] == 'brute-force':
     # Create Brute Force matcher.
-    matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+    matcher = cv2.BFMatcher(norm)
 else:
+    if norm == cv2.NORM_HAMMING:
+        flann_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6,  key_size=12,  multi_probe_level=1)
+    else:
+        flann_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+
     # Create FLANN matcher.
-    flann_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6,  key_size=12,  multi_probe_level=1)
     matcher = cv2.FlannBasedMatcher(flann_params, {})
 
 (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)

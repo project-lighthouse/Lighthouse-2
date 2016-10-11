@@ -16,8 +16,10 @@ class FeatureExtractor:
             # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the
             # image.
             detector = cv2.ORB_create(nfeatures=options['orb_n_features'])
-        else:
+        elif detector_type == 'akaze':
             detector = cv2.AKAZE_create(descriptor_channels=options['akaze_n_channels'])
+        else:
+            detector = cv2.xfeatures2d.SURF_create(hessianThreshold=options['surf_threshold'])
 
         image_descriptions = []
 
@@ -59,8 +61,10 @@ class FeatureExtractor:
                 print('Serializing descriptions for {} : {:%H:%M:%S.%f}'.format(image_description.key,
                                                                                 datetime.datetime.now()))
             serialized_image_descriptions.append({'key': image_description.key,
-                                                  'histogram': image_description.histogram.tolist(),
-                                                  'descriptors': image_description.descriptors.tolist()})
+                                                  'histogram': dict(dtype=str(image_description.histogram.dtype),
+                                                                    content=image_description.histogram.tolist()),
+                                                  'descriptors': dict(dtype=str(image_description.descriptors.dtype),
+                                                                      content=image_description.descriptors.tolist())})
         if self.verbose:
             print('All descriptions serialized, writing to file "{}" : {:%H:%M:%S.%f}'.format(output_path,
                                                                                               datetime.datetime.now()))
@@ -81,10 +85,12 @@ class FeatureExtractor:
             if self.verbose:
                 print('Deserializing descriptions for {} : {:%H:%M:%S.%f}'.format(serialized_image_description['key'],
                                                                                   datetime.datetime.now()))
+            descriptors = serialized_image_description['descriptors']
+            histogram = serialized_image_description['histogram']
             image_descriptions.append(
                 ImageDescription(serialized_image_description['key'],
-                                 numpy.array(serialized_image_description['descriptors'], dtype=numpy.uint8),
-                                 numpy.array(serialized_image_description['histogram'], dtype=numpy.float32)))
+                                 numpy.array(descriptors['content'], dtype=descriptors['dtype']),
+                                 numpy.array(histogram['content'], dtype=histogram['dtype'])))
         if self.verbose:
             print('All descriptions deserialized: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
