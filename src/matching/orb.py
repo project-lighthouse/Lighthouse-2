@@ -1,8 +1,11 @@
 import argparse
 import cv2
 import datetime
+import time
 
 from classes.orb_feature_extractor import OrbFeatureExtractor
+
+start = time.time()
 
 parser = argparse.ArgumentParser(
     description='Finds the best match for the input image among the images in the provided folder.')
@@ -17,12 +20,15 @@ parser.add_argument('--n-features', help='Number of features to extract from tem
 parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
 parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
+parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
 args = vars(parser.parse_args())
 
 verbose = args["verbose"]
 
 if verbose:
     print('Args parsed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+
+template_start = time.time()
 
 # Load the image and convert it to grayscale.
 template = cv2.imread(args["template"])
@@ -46,7 +52,9 @@ matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
 (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
 
 if verbose:
-    print('Template\'s features are extracted: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+    print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+
+print("\033[94mTemplate has been prepared in %s seconds.\033[0m" % (time.time() - template_start))
 
 statistics = []
 
@@ -54,17 +62,21 @@ ratio_test_coefficient = args["ratio_test_k"]
 
 feature_extractor = OrbFeatureExtractor(verbose)
 
+extraction_start = time.time()
+
 if args["images"] is not None:
     image_descriptions = feature_extractor.extract(args["images"], args["n_features"])
 else:
     image_descriptions = feature_extractor.deserialize(args["data"])
+
+print("\033[94mTraining set has been prepared in %s seconds.\033[0m" % (time.time() - extraction_start))
 
 # loop over the images to find the template in
 for image_description in image_descriptions:
     matches = matcher.knnMatch(template_descriptors, image_description.descriptors, k=2)
 
     if verbose:
-        print('{} image\'s match is processed: {:%H:%M:%S}'.format(image_description.key, datetime.datetime.now()))
+        print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(image_description.key, datetime.datetime.now()))
 
     # Apply ratio test.
     good_matches = []
@@ -73,8 +85,8 @@ for image_description in image_descriptions:
             good_matches.append([m])
 
     if verbose:
-        print('{} good matches filtered ({} good matches): {:%H:%M:%S}'.format(image_description.key, len(good_matches),
-                                                                               datetime.datetime.now()))
+        print('{} good matches filtered ({} good matches): {:%H:%M:%S.%f}'.format(image_description.key,
+                                                                                  len(good_matches),                                                                          datetime.datetime.now()))
 
     histogram_comparison_result = cv2.compareHist(template_histogram, image_description.histogram, cv2.HISTCMP_CORREL)
 
@@ -90,6 +102,10 @@ if verbose:
 # Sort by the largest number of "good" matches (3th element (zero based index = 2) of the tuple).
 statistics = sorted(statistics, key=lambda arguments: len(arguments[2]), reverse=True)
 
+print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - start))
+
+# Display results
+
 number_of_matches = args["n_matches"]
 
 for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(statistics):
@@ -97,16 +113,18 @@ for idx, (description, matches, good_matches, histogram_comparison_result) in en
     print("{}{}: {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m', description.key,
                                              len(matches), len(good_matches), histogram_comparison_result))
 
-if args["data"] is not None:
-    print('\033[93m Warning: Displaying of images side-by-side only works if "{}" is based on existing image files and '
-          'created with the same --n-features={}! \033[0m'.format(args["data"], args["n_features"]))
+if not args["no_ui"]:
+    if args["data"] is not None:
+        print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image files '
+              'and created with the same --n-features={}!\033[0m'.format(args["data"], args["n_features"]))
 
-for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(statistics[:number_of_matches]):
-    image = cv2.imread(description.key)
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    keypoints = detector.detect(gray_image)
+    for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(
+            statistics[:number_of_matches]):
+        image = cv2.imread(description.key)
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        keypoints = detector.detect(gray_image)
 
-    result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None, flags=2)
-    cv2.imshow("Best match #" + str(idx + 1), result_image)
+        result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None, flags=2)
+        cv2.imshow("Best match #" + str(idx + 1), result_image)
 
-cv2.waitKey(0)
+    cv2.waitKey(0)
