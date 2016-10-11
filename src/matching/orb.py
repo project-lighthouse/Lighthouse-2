@@ -5,6 +5,8 @@ import time
 
 from classes.orb_feature_extractor import OrbFeatureExtractor
 
+FLANN_INDEX_LSH = 6
+
 start = time.time()
 
 parser = argparse.ArgumentParser(
@@ -19,6 +21,8 @@ parser.add_argument('--n-features', help='Number of features to extract from tem
                     type=int)
 parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
 parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
+parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
+                    default='brute-force')
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
 parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
 args = vars(parser.parse_args())
@@ -46,8 +50,13 @@ if verbose:
 # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
 detector = cv2.ORB_create(nfeatures=args["n_features"])
 
-# Create Brute Force matcher.
-matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+if args['matcher'] == 'brute-force':
+    # Create Brute Force matcher.
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+else:
+    # Create FLANN matcher.
+    flann_params = dict(algorithm=FLANN_INDEX_LSH, table_number=6,  key_size=12,  multi_probe_level=1)
+    matcher = cv2.FlannBasedMatcher(flann_params, {})
 
 (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
 
