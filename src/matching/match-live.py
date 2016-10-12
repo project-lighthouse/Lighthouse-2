@@ -13,7 +13,7 @@ start = time.time()
 
 parser = argparse.ArgumentParser(
     description='Finds the best match for the input image among the images in the provided folder.')
-parser.add_argument('-s', '--source', required=True, help='Video to use (default: built-in cam)', default=0)
+parser.add_argument('-s', '--source', help='Video to use (default: built-in cam)', default=0)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
@@ -151,8 +151,8 @@ def main():
             good_matches_count = len(good_matches)
             matches_count = len(matches)
 
-            score = (0 if matches_count == 0 else good_matches_count / matches_count) + \
-                    (0.05 * histogram_comparison_result)
+            score = (0 if matches_count == 0 else good_matches_count / float(matches_count)) + \
+                    (0.01 * histogram_comparison_result)
 
             statistics.append((template, template_keypoints, image_description, matches, good_matches,
                                histogram_comparison_result, score))

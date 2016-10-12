@@ -129,8 +129,8 @@ for image_description in image_descriptions:
     good_matches_count = len(good_matches)
     matches_count = len(matches)
 
-    score = (0 if matches_count == 0 else good_matches_count / matches_count) + \
-            (0.05 * histogram_comparison_result)
+    score = (0 if matches_count == 0 else good_matches_count / float(matches_count)) + \
+            (0.01 * histogram_comparison_result)
 
     statistics.append((image_description, matches, good_matches, histogram_comparison_result, score))
 
