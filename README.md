@@ -19,21 +19,21 @@ Move an object in front of the camera. It will try to isolate what is moving.
 To extract and save features from the image set you can use the following command:
 ```bash
 
-$ python ./src/matching/extract_features.py -i ./samples/products-front-back -o ./features.json [--detector={orb, akaze}] [--orb-n-features=2000] [--verbose]
+$ python ./src/matching/extract_features.py -i ./samples/products-front-back -o ./features.json [--detector={orb, akaze, surf}] [--orb-n-features=2000] [--verbose]
 
 ```
 
 To run image matching you can use the following command:
 ```bash
 
-$ python ./src/matching/match.py -t ./samples/products-front-back/product-1-front.jpg -i ./samples/products-front-back [--detector={orb, akaze}] [--orb-n-features=2000] [--ratio-test-k=0.75] [--n-matches=3] [--no-ui] [--verbose]
+$ python ./src/matching/match.py -t ./samples/products-front-back/product-1-front.jpg -i ./samples/products-front-back [--detector={orb, akaze, surf}] [--orb-n-features=2000] [--ratio-test-k=0.75] [--n-matches=3] [--no-ui] [--verbose]
 
 ```
 
 or if you already have a file with serialized image features:
 ```bash
 
-$ python ./src/matching/match.py -t ./samples/products-front-back/product-1-front.jpg -d ./features.json [--detector={orb, akaze}] [--orb-n-features=2000] [--ratio-test-k=0.75] [--n-matches=3] [--no-ui] [--verbose]
+$ python ./src/matching/match.py -t ./samples/products-front-back/product-1-front.jpg -d ./features.json [--detector={orb, akaze, surf}] [--orb-n-features=2000] [--ratio-test-k=0.75] [--n-matches=3] [--no-ui] [--verbose]
 
 ```
 

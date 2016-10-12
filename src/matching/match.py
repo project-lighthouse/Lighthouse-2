@@ -126,13 +126,19 @@ for image_description in image_descriptions:
         print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(image_description.key,
                                                                                       datetime.datetime.now()))
 
-    statistics.append((image_description, matches, good_matches, histogram_comparison_result))
+    good_matches_count = len(good_matches)
+    matches_count = len(matches)
+
+    score = (0 if matches_count == 0 else good_matches_count / matches_count) + \
+            (0.05 * histogram_comparison_result)
+
+    statistics.append((image_description, matches, good_matches, histogram_comparison_result, score))
 
 if verbose:
     print('All images have been processed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
 # Sort by the largest number of "good" matches (3th element (zero based index = 2) of the tuple).
-statistics = sorted(statistics, key=lambda arguments: len(arguments[2]), reverse=True)
+statistics = sorted(statistics, key=lambda arguments: arguments[4], reverse=True)
 
 print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - start))
 
@@ -140,10 +146,10 @@ print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time()
 
 number_of_matches = args["n_matches"]
 
-for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(statistics):
+for idx, (description, matches, good_matches, histogram_comparison_result, score) in enumerate(statistics):
     # Mark in green only `n-matches` first matches.
-    print("{}{}: {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m', description.key,
-                                             len(matches), len(good_matches), histogram_comparison_result))
+    print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m', description.key,
+                                             len(matches), len(good_matches), histogram_comparison_result, score))
 
 if not args["no_ui"]:
     if args["data"] is not None:
@@ -151,7 +157,7 @@ if not args["no_ui"]:
               'and created with the same options '
               '(--orb-n-features, --akaze-n-channels etc.)!\033[0m'.format(args["data"]))
 
-    for idx, (description, matches, good_matches, histogram_comparison_result) in enumerate(
+    for idx, (description, matches, good_matches, histogram_comparison_result, score) in enumerate(
             statistics[:number_of_matches]):
         image = cv2.imread(description.key)
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
