@@ -13,7 +13,7 @@ start = time.time()
 
 parser = argparse.ArgumentParser(
     description='Finds the best match for the input image among the images in the provided folder.')
-parser.add_argument('-s', '--source', required=True, help='Video to use (default: built-in cam)', default=0, type=int)
+parser.add_argument('-s', '--source', required=True, help='Video to use (default: built-in cam)', default=0)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
