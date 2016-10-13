@@ -1,10 +1,16 @@
 import argparse
 import cv2
 import datetime
+import os
 import sys
 import time
 
 from classes.feature_extractor import FeatureExtractor
+
+is_raspberry_pi = os.uname()[1] == 'raspberrypi2'
+
+if is_raspberry_pi:
+    import RPi.GPIO as GPIO
 
 FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
@@ -33,6 +39,7 @@ parser.add_argument('--surf-threshold',
                     default=1000, type=int)
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
 parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
+parser.add_argument('--buttons', help='Start capturing only on button click (RPi2 only)', action='store_true')
 args = vars(parser.parse_args())
 
 
@@ -69,6 +76,15 @@ def get_matcher(matcher_type, norm):
 
 def main():
     verbose = args["verbose"]
+    buttons = args["buttons"]
+
+    if buttons and not is_raspberry_pi:
+        print("\033[91mArgument 'buttons' can only be used on Raspberry Pi 2.\033[0m")
+        return -1
+
+    if buttons:
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(17, GPIO.IN)
 
     if verbose:
         print('Args parsed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
@@ -102,78 +118,86 @@ def main():
     number_of_frames = args["n_frames"]
 
     while True:
-        ret, template = cap.read()
+        while buttons:
+            if GPIO.input(17) == 1:
+                break
+            time.sleep(0.05)
 
-        if not ret or len(statistics) > number_of_frames:
-            break
+        while True:
+            ret, template = cap.read()
 
-        gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            if not ret or len(statistics) > number_of_frames:
+                break
 
-        if verbose:
-            print('Template loaded: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
-
-        template_histogram = cv2.calcHist([template], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-        template_histogram = cv2.normalize(template_histogram, template_histogram).flatten()
-
-        if verbose:
-            print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
-
-        (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
-
-        if verbose:
-            print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
-
-        # loop over the images to find the template in
-        for image_description in image_descriptions:
-            matches = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
+            gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
             if verbose:
-                print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(
-                    image_description.key, datetime.datetime.now()))
+                print('Template loaded: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-            # Apply ratio test.
-            good_matches = []
-            for m in matches:
-                if len(m) == 2 and m[0].distance < ratio_test_coefficient * m[1].distance:
-                    good_matches.append([m[0]])
+            template_histogram = cv2.calcHist([template], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+            template_histogram = cv2.normalize(template_histogram, template_histogram).flatten()
 
             if verbose:
-                print('{} good matches filtered ({} good matches): {:%H:%M:%S.%f}'.format(image_description.key,
-                                                                                          len(good_matches),
-                                                                                          datetime.datetime.now()))
+                print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-            histogram_comparison_result = cv2.compareHist(template_histogram, image_description.histogram,
-                                                          cv2.HISTCMP_CORREL)
+            (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
 
             if verbose:
-                print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(image_description.key,
+                print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+
+            # loop over the images to find the template in
+            for image_description in image_descriptions:
+                matches = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
+
+                if verbose:
+                    print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(
+                        image_description.key, datetime.datetime.now()))
+
+                # Apply ratio test.
+                good_matches = []
+                for m in matches:
+                    if len(m) == 2 and m[0].distance < ratio_test_coefficient * m[1].distance:
+                        good_matches.append([m[0]])
+
+                if verbose:
+                    print('{} good matches filtered ({} good matches): {:%H:%M:%S.%f}'.format(image_description.key,
+                                                                                              len(good_matches),
                                                                                               datetime.datetime.now()))
-            good_matches_count = len(good_matches)
-            matches_count = len(matches)
 
-            score = (0 if matches_count == 0 else good_matches_count / float(matches_count)) + \
-                    (0.01 * histogram_comparison_result)
+                histogram_comparison_result = cv2.compareHist(template_histogram, image_description.histogram,
+                                                              cv2.HISTCMP_CORREL)
 
-            statistics.append((template, template_keypoints, image_description, matches, good_matches,
-                               histogram_comparison_result, score))
+                if verbose:
+                    print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(image_description.key,
+                                                                                                  datetime.datetime.now()))
+                good_matches_count = len(good_matches)
+                matches_count = len(matches)
 
-    if verbose:
-        print('All images have been processed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+                score = (0 if matches_count == 0 else good_matches_count / float(matches_count)) + \
+                        (0.01 * histogram_comparison_result)
 
-    # Sort by the largest number of "good" matches (3th element (zero based index = 2) of the tuple).
-    statistics = sorted(statistics, key=lambda arguments: arguments[6], reverse=True)
+                statistics.append((template, template_keypoints, image_description, matches, good_matches,
+                                   histogram_comparison_result, score))
 
-    print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - start))
+        if verbose:
+            print('All images have been processed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-    # Display results
-    number_of_matches = args["n_matches"]
+        # Sort by the largest number of "good" matches (3th element (zero based index = 2) of the tuple).
+        statistics = sorted(statistics, key=lambda arguments: arguments[6], reverse=True)
 
-    for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result, score) in \
-            enumerate(statistics[:10]):
-        # Mark in green only `n-matches` first matches.
-        print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m',
-                                                      description.key, len(matches), len(good_matches),
-                                                      histogram_comparison_result, score))
+        print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - start))
+
+        # Display results
+        number_of_matches = args["n_matches"]
+
+        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result, score) in \
+                enumerate(statistics[:10]):
+            # Mark in green only `n-matches` first matches.
+            print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m',
+                                                          description.key, len(matches), len(good_matches),
+                                                          histogram_comparison_result, score))
+        if not buttons:
+            break
 
     cap.release()
 
