@@ -11,6 +11,7 @@ parser.add_argument('--source', help='Video to use (default: built-in cam)', def
 parser.add_argument('--dump-raw', help='Write raw captured video to this file (default: none)', default=None)
 parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
 
+parser.add_argument('--contours-prefix', help='Write contours to this destination (default: none).', default=None)
 parser.add_argument('--objects-prefix', help='Write captured objects to this destination (default: none).', default=None)
 parser.add_argument('--masks-prefix', help='Write captured masks (before preprocessing) to this destination (default: none).', default=None)
 parser.add_argument('--keep', help='Keep the N objects with the best score and capture them (default: 3).', default=3, type=int)
@@ -44,6 +45,10 @@ parser.set_defaults(stabilize=True)
 parser.add_argument('--remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
 parser.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
 parser.set_defaults(remove_shadows=False)
+
+parser.add_argument('--use-contour', dest='use_contour', action='store_true')
+parser.add_argument('--no-use-contour', dest='use_contour', action='store_false')
+parser.set_defaults(use_contour=False)
 
 args = vars(parser.parse_args())
 if args['buffer_init'] <= 0:
@@ -173,7 +178,7 @@ def main():
         corners = [[0, 0], [height - 1, 0], [0, width - 1], [height - 1, width - 1]]
 
         score = cv2.countNonZero(mask)
-        print("Starting with a score of %d" % score)
+        print("Starting with a score of %d." % score)
         if args['fill_holes'] and score != surface:
             # Attempt to fill any holes.
             # At this stage, often, we have a mask surrounded by black and containing holes.
@@ -208,12 +213,30 @@ def main():
                         print("Improved to a score of %d" % score)
 
         bw_mask = mask
-        mask = cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB)
 
         if args['show']:
             cv2.imshow('mask', mask)
             cv2.moveWindow('mask', args['width'] + 32, args['height'] + 32)
 
+        if args['use_contour']:
+            image, contours, hierarchy = cv2.findContours(bw_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+            # FIXME: We could remove small contours (here or later)
+            bw_mask = numpy.zeros((height, width), numpy.uint8)
+            for cnt in contours:
+                if cv2.contourArea(cnt) > args['min_size'] or 0:
+                    hull = cv2.convexHull(cnt)
+                    cv2.fillPoly(bw_mask, [hull], 255, 8)
+
+            if args['contours_prefix']:
+                dest = "%s_%d.png" % (args['contours_prefix'], i)
+                print("Writing contours to %s." % dest)
+                cv2.imwrite(dest, bw_mask)
+
+            print("contours: %d, score: %d" % (len(contours), score))
+
+        score = cv2.countNonZero(bw_mask)
+        mask = cv2.cvtColor(bw_mask, cv2.COLOR_GRAY2RGB)
         extracted = cv2.bitwise_and(mask, frame)
         if args['show']:
             cv2.imshow('extracted', extracted)
@@ -223,7 +246,7 @@ def main():
             # We have captured the entire image. Definitely not a good thing to do.
             if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
                 # We are done buffering
-                candidates.append((score, mask, bw_mask, original_mask, extracted, i))
+                candidates.append((score, mask, bw_mask, original_mask, extracted, i, 0))
 
         latest_score = score
 
@@ -231,9 +254,9 @@ def main():
     candidates = candidates[:args['keep']]
 
     for candidate_index, candidate in enumerate(candidates):
-        best_score, best_mask, best_bw_mask, best_original_mask, best_extracted, best_index = candidate
+        best_score, best_mask, best_bw_mask, best_original_mask, best_extracted, best_index, best_perimeter = candidate
 
-        print ("Best score %d" % best_score)
+        print ("Best score %d/%s" % (best_score, best_perimeter))
 
 # Get rid of small components
         if args['min_size'] > 0:
