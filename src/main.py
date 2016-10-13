@@ -34,8 +34,8 @@ parser.add_argument('--autostart', help='Start processing immediately (default).
 parser.add_argument('--no-autostart', help='Do not start processing immediately.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
 
-parser.add_argument('--show', help='Display videos (default).', dest='show', action='store_true')
-parser.add_argument('--no-show', help='Do not display videos.', dest='show', action='store_false')
+parser.add_argument('--show', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
+parser.add_argument('--no-show', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
 parser.set_defaults(show=True)
 
 parser.add_argument('--stabilize', help='Stabilize image (default).', dest='stabilize', action='store_true')
@@ -89,16 +89,18 @@ def main():
             break
         ret, current = cap.read()
 
-        key = cv2.waitKey(1) & 0xFF
-        # <q> or <Esc>: quit
-        if key == 27 or key == ord('q'):
-            break
-        # <spacebar> or `force_start`: start detecting.
-        elif key == ord(' ') or force_start:
-            force_start = False
-            idle = False
-            frames = []
-            consecutive_stable_frames = 0
+        key = None
+        if args['show']:
+            key = cv2.waitKey(1) & 0xFF
+            # <q> or <Esc>: quit
+            if key == 27 or key == ord('q'):
+                break
+            # <spacebar> or `force_start`: start detecting.
+            elif key == ord(' ') or force_start:
+                force_start = False
+                idle = False
+                frames = []
+                consecutive_stable_frames = 0
 
         if not ret:
             print("No more frames.")
