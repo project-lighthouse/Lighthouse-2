@@ -12,6 +12,7 @@ is_raspberry_pi = os.uname()[1] == 'raspberrypi2'
 if is_raspberry_pi:
     import RPi.GPIO as GPIO
 
+GPIO_NUMBER = 17
 FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
 
@@ -84,7 +85,7 @@ def main():
 
     if buttons:
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(17, GPIO.IN)
+        GPIO.setup(GPIO_NUMBER, GPIO.IN)
 
     if verbose:
         print('Args parsed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
@@ -119,7 +120,8 @@ def main():
 
     while True:
         while buttons:
-            if GPIO.input(17) == 1:
+            if GPIO.input(GPIO_NUMBER) == 1:
+                print("\033[92mButton is pressed, running matching...\033[0m")
                 break
             time.sleep(0.05)
 
