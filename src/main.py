@@ -274,10 +274,14 @@ def main():
                     best_extracted[kill_list] = 0
                     removing += 1
 
+# Add transparency
+#        cv2.mixChannels([best_extracted, best_mask], [0, 0, 1, 1, 2, 2, ])
+        split_1, split_2, split_3 = cv2.split(best_extracted)
+        transparency = cv2.merge([split_1, split_2, split_3, best_bw_mask])
         if args['objects_prefix']:
             dest = "%s_%d.png" % (args['objects_prefix'], candidate_index)
             print("Writing object to %s." % dest)
-            cv2.imwrite(dest, best_extracted)
+            cv2.imwrite(dest, transparency)
         if args['masks_prefix']:
             dest = "%s_%d.png" % (args['masks_prefix'], candidate_index)
             print("Writing mask to %s." % dest)
