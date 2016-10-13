@@ -16,8 +16,6 @@ GPIO_NUMBER = 17
 FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
 
-start = time.time()
-
 parser = argparse.ArgumentParser(
     description='Finds the best match for the input image among the images in the provided folder.')
 parser.add_argument('-s', '--source', help='Video to use (default: built-in cam)', default=0)
@@ -76,6 +74,10 @@ def get_matcher(matcher_type, norm):
 
 
 def main():
+    start = time.time()
+
+    print("\033[94mMain function started.\033[0m")
+
     verbose = args["verbose"]
     buttons = args["buttons"]
 
@@ -125,10 +127,16 @@ def main():
                 break
             time.sleep(0.05)
 
+        matching_start = time.time()
+
         while True:
             ret, template = cap.read()
 
-            if not ret or len(statistics) > number_of_frames:
+            if not ret:
+                print("No frames is available.")
+                break
+
+            if len(statistics) > number_of_frames:
                 break
 
             gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
@@ -187,7 +195,7 @@ def main():
         # Sort by the largest number of "good" matches (3th element (zero based index = 2) of the tuple).
         statistics = sorted(statistics, key=lambda arguments: arguments[6], reverse=True)
 
-        print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - start))
+        print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - matching_start))
 
         # Display results
         number_of_matches = args["n_matches"]
@@ -200,6 +208,10 @@ def main():
                                                           histogram_comparison_result, score))
         if not buttons:
             break
+        else:
+            statistics = []
+
+    print("\033[94mProgram has been executed in %s seconds.\033[0m" % (time.time() - start))
 
     cap.release()
 
