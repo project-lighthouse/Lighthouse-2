@@ -184,7 +184,7 @@ def main():
         if args['fill_holes'] and score != surface:
             # Attempt to fill any holes.
             # At this stage, often, we have a mask surrounded by black and containing holes.
-            # (this is not always the case – sometimes, the mask is a cloud of points).
+            # (this is not always the case -  sometimes, the mask is a cloud of points).
             positive = mask.copy()
             fill_mask = numpy.zeros((height + 2, width + 2), numpy.uint8)
             found = False
