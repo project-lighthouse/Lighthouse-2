@@ -96,11 +96,14 @@ def main():
             if key == 27 or key == ord('q'):
                 break
             # <spacebar> or `force_start`: start detecting.
-            elif key == ord(' ') or force_start:
-                force_start = False
-                idle = False
-                frames = []
-                consecutive_stable_frames = 0
+            elif key == ord(' '):
+                force_start = True
+
+        if force_start:
+            force_start = False
+            idle = False
+            frames = []
+            consecutive_stable_frames = 0
 
         if not ret:
             print("No more frames.")
