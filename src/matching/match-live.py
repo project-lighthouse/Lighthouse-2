@@ -6,6 +6,7 @@ import sys
 import time
 
 from classes.feature_extractor import FeatureExtractor
+from classes.video_stream import VideoStream
 
 is_raspberry_pi = os.uname()[1] == 'raspberrypi2'
 
@@ -80,6 +81,7 @@ def main():
 
     verbose = args["verbose"]
     buttons = args["buttons"]
+    number_of_matches = args["n_matches"]
 
     if buttons and not is_raspberry_pi:
         print("\033[91mArgument 'buttons' can only be used on Raspberry Pi 2.\033[0m")
@@ -94,11 +96,12 @@ def main():
 
     detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
                             surf_threshold=args['surf_threshold'])
-
-    cap = cv2.VideoCapture(args['source'])
-    if cap is None or not cap.isOpened():
+    stream_start = time.time()
+    vs = VideoStream(args['source']).start()
+    if not vs.is_opened():
         print('Error: unable to open video source')
         return -1
+    print("\033[94mVideo stream has been prepared in %s seconds.\033[0m" % (time.time() - stream_start))
 
     detector, norm = get_detector(args['detector'], detector_options)
     matcher = get_matcher(args['matcher'], norm)
@@ -130,7 +133,7 @@ def main():
         matching_start = time.time()
 
         while True:
-            ret, template = cap.read()
+            ret, template = vs.read()
 
             if not ret:
                 print("No frames is available.")
@@ -178,8 +181,8 @@ def main():
                                                               cv2.HISTCMP_CORREL)
 
                 if verbose:
-                    print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(image_description.key,
-                                                                                                  datetime.datetime.now()))
+                    print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(
+                        image_description.key, datetime.datetime.now()))
                 good_matches_count = len(good_matches)
                 matches_count = len(matches)
 
@@ -197,11 +200,8 @@ def main():
 
         print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - matching_start))
 
-        # Display results
-        number_of_matches = args["n_matches"]
-
-        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result, score) in \
-                enumerate(statistics[:10]):
+        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result,
+                  score) in enumerate(statistics[:10]):
             # Mark in green only `n-matches` first matches.
             print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m',
                                                           description.key, len(matches), len(good_matches),
@@ -213,7 +213,7 @@ def main():
 
     print("\033[94mProgram has been executed in %s seconds.\033[0m" % (time.time() - start))
 
-    cap.release()
+    vs.stop()
 
     if not args["no_ui"]:
         if args["data"] is not None:
@@ -221,8 +221,8 @@ def main():
                   'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
                   'etc.)!\033[0m'.format(args["data"]))
 
-        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result, score) \
-                in enumerate(statistics[:number_of_matches]):
+        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result,
+                  score) in enumerate(statistics[:number_of_matches]):
             image = cv2.imread(description.key)
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             keypoints = detector.detect(gray_image)
