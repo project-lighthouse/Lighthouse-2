@@ -136,13 +136,24 @@ def main():
 
     while True:
         while cmd_ui:
-            if 0 <= best_score < 0.1:
+            if 0 <= best_score < 5:
                 yn = input("Do you want to remember this object (y/n)? ")
                 if yn == "y":
                     object_key = input("Enter the object key [default=%s]: " % len(image_descriptions))
                     frame = frames[0]
-                    image_descriptions.append(ImageDescription(object_key, frame['descriptors'], frame['histogram']))
+
+                    images_with_same_key = [x for x in image_descriptions if x.key == object_key]
+
+                    image_description = ImageDescription(object_key, len(images_with_same_key), frame['descriptors'],
+                                                         frame['histogram'])
+                    image_descriptions.append(image_description)
+
                     # save image
+                    if data_source_map is not None:
+                        key_path = "%s/%s" % (data_source_map, image_description.key)
+                        if not os.path.exists(key_path):
+                            os.makedirs(key_path)
+                        cv2.imwrite("%s/%s.jpg" % (key_path, image_description.index), frame['frame'])
 
                     print("\033[92mImage successfully added (now %s images known)\033[0m" % len(image_descriptions))
 
@@ -202,7 +213,7 @@ def main():
 
             # loop over the images to find the template in
             for idx, image_description in enumerate(image_descriptions):
-                matches = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
+                images_with_same_key = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
 
                 if verbose:
                     print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(
@@ -210,7 +221,7 @@ def main():
 
                 # Apply ratio test.
                 good_matches = []
-                for m in matches:
+                for m in images_with_same_key:
                     if len(m) == 2 and m[0].distance < ratio_test_coefficient * m[1].distance:
                         good_matches.append([m[0]])
 
@@ -226,12 +237,15 @@ def main():
                     print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(
                         image_description.key, datetime.datetime.now()))
                 good_matches_count = len(good_matches)
-                matches_count = len(matches)
+                matches_count = len(images_with_same_key)
 
-                score = (0 if matches_count == 0 else good_matches_count / float(matches_count)) + \
-                        (0.01 * histogram_comparison_result)
+                if matches_count == 0:
+                    score = 0
+                else:
+                    score = matches_count / float(len(image_description.descriptors)) * \
+                            (good_matches_count / float(matches_count) * 100) + histogram_comparison_result
 
-                statistics.append((frame_index, idx, matches, good_matches, histogram_comparison_result, score))
+                statistics.append((frame_index, idx, images_with_same_key, good_matches, histogram_comparison_result, score))
 
             frames.append({'frame': template, 'keypoints': template_keypoints, 'descriptors': template_descriptors,
                            'histogram': template_histogram})
@@ -244,31 +258,34 @@ def main():
 
         print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - matching_start))
 
-        for idx, (frame_index, image_index, matches, good_matches, histogram_comparison_result, score) in \
+        for idx, (frame_index, image_index, images_with_same_key, good_matches, histogram_comparison_result, score) in \
                 enumerate(statistics[:10]):
             description = image_descriptions[image_index]
 
             # Mark in green only `n-matches` first matches.
             print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m',
-                                                          description.key, len(matches), len(good_matches),
+                                                          description.key, len(images_with_same_key), len(good_matches),
                                                           histogram_comparison_result, score))
 
         best_match = None if len(statistics) == 0 else statistics[0]
         best_score = 0 if best_match is None else statistics[0][5]
 
-        if best_score < 0.1:
+        if best_score < 5:
             print("Don't know such object (score %s)" % best_score)
         else:
             description = image_descriptions[best_match[1]]
             print("Known object (score %s) - %s" % (best_score, description.key))
-            image = cv2.imread(description.key)
-            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            keypoints = detector.detect(gray_image)
+            image = cv2.imread("%s/%s/%s.jpg" % (data_source_map, description.key, description.index))
+            template = frames[best_match[0]]
 
-            result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None,
-                                              flags=2)
-            cv2.imshow("Best match #" + str(idx + 1), result_image)
-            cv2.waitKey(0)
+            if image is not None:
+                gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                keypoints = detector.detect(gray_image)
+
+                result_image = cv2.drawMatchesKnn(template['frame'], template['keypoints'], image, keypoints,
+                                                  best_match[3], None, flags=2)
+                cv2.imshow("best-match", result_image)
+                cv2.waitKey(0)
 
         if not gpio_ui and not cmd_ui:
             break
@@ -283,7 +300,7 @@ def main():
                   'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
                   'etc.)!\033[0m'.format(args["data"]))
 
-        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result,
+        for idx, (template, template_keypoints, description, images_with_same_key, good_matches, histogram_comparison_result,
                   score) in enumerate(statistics[:number_of_matches]):
             image = cv2.imread(description.key)
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
