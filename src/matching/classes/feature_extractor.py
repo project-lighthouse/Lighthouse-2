@@ -3,6 +3,7 @@ import datetime
 import glob
 import json
 import numpy
+import os
 
 from .image_description import ImageDescription
 
@@ -24,7 +25,10 @@ class FeatureExtractor:
         image_descriptions = []
 
         # loop over the images to find the template in
-        for image_set_path in glob.glob(image_set_path + "/*.jpg"):
+        for image_set_path in glob.glob(image_set_path + "/**/*.jpg"):
+            # File name is an index, file folder is the key.
+            key, index = os.path.splitext(image_set_path)[0].split('/')[-2:]
+
             # Load the image, convert it to grayscale.
             image = cv2.imread(image_set_path)
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -45,7 +49,7 @@ class FeatureExtractor:
                 print('{} image\'s histogram calculated: {:%H:%M:%S.%f}'.format(image_set_path,
                                                                                 datetime.datetime.now()))
 
-            image_descriptions.append(ImageDescription(image_set_path, image_descriptors, image_histogram))
+            image_descriptions.append(ImageDescription(key, index, image_descriptors, image_histogram))
 
         if self.verbose:
             print('All images processed ({} images): {:%H:%M:%S.%f}'.format(len(image_descriptions),
@@ -61,6 +65,7 @@ class FeatureExtractor:
                 print('Serializing descriptions for {} : {:%H:%M:%S.%f}'.format(image_description.key,
                                                                                 datetime.datetime.now()))
             serialized_image_descriptions.append({'key': image_description.key,
+                                                  'index': image_description.index,
                                                   'histogram': dict(dtype=str(image_description.histogram.dtype),
                                                                     content=image_description.histogram.tolist()),
                                                   'descriptors': dict(dtype=str(image_description.descriptors.dtype),
@@ -73,8 +78,12 @@ class FeatureExtractor:
             json.dump(serialized_image_descriptions, outfile)
 
     def deserialize(self, input_path):
-        with open(input_path, 'r') as input_file:
-            serialized_image_descriptions = json.load(input_file)
+        try:
+            with open(input_path, 'r') as input_file:
+                serialized_image_descriptions = json.load(input_file)
+        except IOError:
+            print("\033[93mWarning: Feature file doesn't exist.\033[0m")
+            return []
 
         if self.verbose:
             print('Serialized data loaded ({} records): {:%H:%M:%S.%f}'.format(
@@ -88,7 +97,7 @@ class FeatureExtractor:
             descriptors = serialized_image_description['descriptors']
             histogram = serialized_image_description['histogram']
             image_descriptions.append(
-                ImageDescription(serialized_image_description['key'],
+                ImageDescription(serialized_image_description['key'], serialized_image_description['index'],
                                  numpy.array(descriptors['content'], dtype=descriptors['dtype']),
                                  numpy.array(histogram['content'], dtype=histogram['dtype'])))
         if self.verbose:

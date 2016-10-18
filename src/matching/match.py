@@ -17,6 +17,7 @@ parser.add_argument('-t', '--template', required=True, help='Path to the image w
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
+parser.add_argument('--data-source-map', help='Path to the folder with the images that data file based on')
 parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
                     default='orb')
 parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
@@ -31,7 +32,7 @@ parser.add_argument('--surf-threshold',
                     help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)',
                     default=1000, type=int)
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
-parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
+parser.add_argument('--no-gui', help='Avoid using of any GUI elements', action='store_true')
 args = vars(parser.parse_args())
 
 verbose = args["verbose"]
@@ -151,7 +152,12 @@ for idx, (description, matches, good_matches, histogram_comparison_result, score
     print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m', description.key,
                                              len(matches), len(good_matches), histogram_comparison_result, score))
 
-if not args["no_ui"]:
+if not args["no_gui"]:
+    data_source_map = args["data_source_map"]
+    if data_source_map is None:
+        print('\033[91mPlease, specify --data-source-map to see side-by-side comparison.\033[0m'.format(args["data"]))
+        exit(0)
+
     if args["data"] is not None:
         print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image files '
               'and created with the same options '
@@ -159,7 +165,7 @@ if not args["no_ui"]:
 
     for idx, (description, matches, good_matches, histogram_comparison_result, score) in enumerate(
             statistics[:number_of_matches]):
-        image = cv2.imread(description.key)
+        image = cv2.imread("%s/%s/%s.jpg" % (data_source_map, description.key, description.index))
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         keypoints = detector.detect(gray_image)
 
