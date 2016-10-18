@@ -7,11 +7,18 @@ import time
 
 from classes.feature_extractor import FeatureExtractor
 from classes.video_stream import VideoStream
+from classes.image_description import ImageDescription
 
 is_raspberry_pi = os.uname()[1] == 'raspberrypi2'
 
 if is_raspberry_pi:
     import RPi.GPIO as GPIO
+
+# Python 2.7 uses raw_input while Python 3 deprecated it in favor of input.
+try:
+    input = raw_input
+except NameError:
+    pass
 
 GPIO_NUMBER = 17
 FLANN_INDEX_KDTREE = 1
@@ -23,6 +30,7 @@ parser.add_argument('-s', '--source', help='Video to use (default: built-in cam)
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
+parser.add_argument('--data-source-map', help='Path to the folder with the images that data file based on')
 parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
                     default='orb')
 parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
@@ -38,8 +46,10 @@ parser.add_argument('--surf-threshold',
                     help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)',
                     default=1000, type=int)
 parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
-parser.add_argument('--no-ui', help='Increase output verbosity', action='store_true')
-parser.add_argument('--buttons', help='Start capturing only on button click (RPi2 only)', action='store_true')
+parser.add_argument('--no-gui', help='Avoid using of any GUI elements', action='store_true')
+group = parser.add_mutually_exclusive_group()
+group.add_argument('--gpio-ui', help='Use GPIO based command interface (RPi2 only)', action='store_true')
+group.add_argument('--cmd-ui', help='Use command line interface to manage the app', action='store_true')
 args = vars(parser.parse_args())
 
 
@@ -80,22 +90,23 @@ def main():
     print("\033[94mMain function started.\033[0m")
 
     verbose = args["verbose"]
-    buttons = args["buttons"]
+    gpio_ui = args["gpio_ui"]
+    cmd_ui = args["cmd_ui"]
     number_of_matches = args["n_matches"]
+    ratio_test_coefficient = args["ratio_test_k"]
+    number_of_frames = args["n_frames"]
+    data_source_map = args["data_source_map"]
 
-    if buttons and not is_raspberry_pi:
-        print("\033[91mArgument 'buttons' can only be used on Raspberry Pi 2.\033[0m")
-        return -1
-
-    if buttons:
+    if gpio_ui:
+        if not is_raspberry_pi:
+            print("\033[91mGPIO user interface can only be used on Raspberry Pi 2.\033[0m")
+            return -1
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(GPIO_NUMBER, GPIO.IN)
 
     if verbose:
         print('Args parsed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-    detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
-                            surf_threshold=args['surf_threshold'])
     stream_start = time.time()
     vs = VideoStream(args['source']).start()
     if not vs.is_opened():
@@ -103,15 +114,12 @@ def main():
         return -1
     print("\033[94mVideo stream has been prepared in %s seconds.\033[0m" % (time.time() - stream_start))
 
+    detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
+                            surf_threshold=args['surf_threshold'])
     detector, norm = get_detector(args['detector'], detector_options)
     matcher = get_matcher(args['matcher'], norm)
 
-    statistics = []
-
-    ratio_test_coefficient = args["ratio_test_k"]
-
     feature_extractor = FeatureExtractor(verbose)
-
     extraction_start = time.time()
 
     if args["images"] is not None:
@@ -121,16 +129,48 @@ def main():
 
     print("\033[94mTraining set has been prepared in %s seconds.\033[0m" % (time.time() - extraction_start))
 
-    number_of_frames = args["n_frames"]
+    statistics = []
+    frames = []
+    best_match = None
+    best_score = -1
 
     while True:
-        while buttons:
+        while cmd_ui:
+            if 0 <= best_score < 0.1:
+                yn = input("Do you want to remember this object (y/n)? ")
+                if yn == "y":
+                    object_key = input("Enter the object key [default=%s]: " % len(image_descriptions))
+                    frame = frames[0]
+                    image_descriptions.append(ImageDescription(object_key, frame['descriptors'], frame['histogram']))
+                    # save image
+
+                    print("\033[92mImage successfully added (now %s images known)\033[0m" % len(image_descriptions))
+
+            command = input("Enter command (eg. c - capture, s - show): ")
+            if command == "c":
+                break
+            elif command == "s":
+                if is_raspberry_pi:
+                    print("Show is GUI command and not supported on headless Raspberry Pi")
+                else:
+                    ret, captured_frame = vs.read()
+                    cv2.imshow("frame", captured_frame)
+                    cv2.waitKey(0)
+                    cv2.destroyWindow("frame")
+                    cv2.waitKey(0)
+            else:
+                print("Unknown command: %s" % command)
+
+        while gpio_ui:
             if GPIO.input(GPIO_NUMBER) == 1:
                 print("\033[92mButton is pressed, running matching...\033[0m")
                 break
             time.sleep(0.05)
 
         matching_start = time.time()
+
+        statistics = []
+        frames = []
 
         while True:
             ret, template = vs.read()
@@ -139,7 +179,7 @@ def main():
                 print("No frames is available.")
                 break
 
-            if len(statistics) > number_of_frames:
+            if len(frames) >= number_of_frames:
                 break
 
             gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
@@ -158,8 +198,10 @@ def main():
             if verbose:
                 print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
+            frame_index = len(frames)
+
             # loop over the images to find the template in
-            for image_description in image_descriptions:
+            for idx, image_description in enumerate(image_descriptions):
                 matches = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
 
                 if verbose:
@@ -189,33 +231,53 @@ def main():
                 score = (0 if matches_count == 0 else good_matches_count / float(matches_count)) + \
                         (0.01 * histogram_comparison_result)
 
-                statistics.append((template, template_keypoints, image_description, matches, good_matches,
-                                   histogram_comparison_result, score))
+                statistics.append((frame_index, idx, matches, good_matches, histogram_comparison_result, score))
+
+            frames.append({'frame': template, 'keypoints': template_keypoints, 'descriptors': template_descriptors,
+                           'histogram': template_histogram})
 
         if verbose:
             print('All images have been processed: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-        # Sort by the largest number of "good" matches (3th element (zero based index = 2) of the tuple).
-        statistics = sorted(statistics, key=lambda arguments: arguments[6], reverse=True)
+        # Sort by the largest number of "good" matches (6th element (zero based index = 5) of the tuple).
+        statistics = sorted(statistics, key=lambda arguments: arguments[5], reverse=True)
 
         print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - matching_start))
 
-        for idx, (template, template_keypoints, description, matches, good_matches, histogram_comparison_result,
-                  score) in enumerate(statistics[:10]):
+        for idx, (frame_index, image_index, matches, good_matches, histogram_comparison_result, score) in \
+                enumerate(statistics[:10]):
+            description = image_descriptions[image_index]
+
             # Mark in green only `n-matches` first matches.
             print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m',
                                                           description.key, len(matches), len(good_matches),
                                                           histogram_comparison_result, score))
-        if not buttons:
-            break
+
+        best_match = None if len(statistics) == 0 else statistics[0]
+        best_score = 0 if best_match is None else statistics[0][5]
+
+        if best_score < 0.1:
+            print("Don't know such object (score %s)" % best_score)
         else:
-            statistics = []
+            description = image_descriptions[best_match[1]]
+            print("Known object (score %s) - %s" % (best_score, description.key))
+            image = cv2.imread(description.key)
+            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            keypoints = detector.detect(gray_image)
+
+            result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None,
+                                              flags=2)
+            cv2.imshow("Best match #" + str(idx + 1), result_image)
+            cv2.waitKey(0)
+
+        if not gpio_ui and not cmd_ui:
+            break
 
     print("\033[94mProgram has been executed in %s seconds.\033[0m" % (time.time() - start))
 
     vs.stop()
 
-    if not args["no_ui"]:
+    if not args["no_gui"] and len(statistics) > 0:
         if args["data"] is not None:
             print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image '
                   'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
