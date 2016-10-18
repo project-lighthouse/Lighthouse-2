@@ -4,7 +4,7 @@ import datetime
 import os
 import sys
 import time
-
+from threading import Thread
 from classes.feature_extractor import FeatureExtractor
 from classes.video_stream import VideoStream
 from classes.image_description import ImageDescription
@@ -84,6 +84,11 @@ def get_matcher(matcher_type, norm):
     return matcher
 
 
+def serialize_image_descriptions(image_descriptions, file_name, verbose):
+    feature_extractor = FeatureExtractor(verbose)
+    feature_extractor.serialize(image_descriptions, file_name)
+
+
 def main():
     start = time.time()
 
@@ -138,7 +143,7 @@ def main():
     while True:
         while cmd_ui:
             if 0 <= best_score < 5:
-                yn = input("Do you want to remember this object (y/n)? ")
+                yn = input("Do you want to record this picture (y/n)? ")
                 if yn == "y":
                     object_key = input("Enter the object key [default=%s]: " % len(image_descriptions))
                     frame = frames[0]
@@ -149,12 +154,16 @@ def main():
                                                          frame['histogram'])
                     image_descriptions.append(image_description)
 
-                    # save image
+                    # Save image if --data-source-map is provided.
                     if data_source_map is not None:
                         key_path = "%s/%s" % (data_source_map, image_description.key)
                         if not os.path.exists(key_path):
                             os.makedirs(key_path)
                         cv2.imwrite("%s/%s.jpg" % (key_path, image_description.index), frame['frame'])
+
+                    # Serialize image_descriptions
+                    Thread(target=serialize_image_descriptions,
+                           args=(image_descriptions, args["data"], verbose)).start()
 
                     print("\033[92mImage successfully added (now %s images known)\033[0m" % len(image_descriptions))
 
@@ -210,6 +219,9 @@ def main():
             if verbose:
                 print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
+            # If we can't extract at least of 80% of requested keypoints then it's a bad frame, let's skip.
+            # if len(template_keypoints) /
+
             frame_index = len(frames)
 
             # loop over the images to find the template in
@@ -246,7 +258,8 @@ def main():
                     score = matches_count / float(len(image_description.descriptors)) * \
                             (good_matches_count / float(matches_count) * 100) + histogram_comparison_result
 
-                statistics.append((frame_index, idx, images_with_same_key, good_matches, histogram_comparison_result, score))
+                statistics.append((frame_index, idx, images_with_same_key, good_matches, histogram_comparison_result,
+                                   score))
 
             frames.append({'frame': template, 'keypoints': template_keypoints, 'descriptors': template_descriptors,
                            'histogram': template_histogram})
