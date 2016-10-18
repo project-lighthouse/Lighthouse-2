@@ -1,3 +1,7 @@
+#
+# FIXME: I *think* that this file is deprecated.
+#
+
 import argparse
 import cv2
 import datetime
@@ -10,29 +14,6 @@ FLANN_INDEX_LSH = 6
 
 start = time.time()
 
-parser = argparse.ArgumentParser(
-    description='Finds the best match for the input image among the images in the provided folder.')
-parser.add_argument('-t', '--template', required=True, help='Path to the image we would like to find match for')
-
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
-group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
-parser.add_argument('--data-source-map', help='Path to the folder with the images that data file based on')
-parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
-                    default='orb')
-parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
-                    default='brute-force')
-parser.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
-parser.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
-parser.add_argument('--orb-n-features', help='Number of features to extract used in ORB detector (default: 2000)',
-                    default=2000, type=int)
-parser.add_argument('--akaze-n-channels', help='Number of channels used in AKAZE detector (default: 3)',
-                    choices=[1, 2, 3], default=3, type=int)
-parser.add_argument('--surf-threshold',
-                    help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)',
-                    default=1000, type=int)
-parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
-parser.add_argument('--no-gui', help='Avoid using of any GUI elements', action='store_true')
 args = vars(parser.parse_args())
 
 verbose = args["verbose"]
