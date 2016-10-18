@@ -90,6 +90,7 @@ def main():
     print("\033[94mMain function started.\033[0m")
 
     verbose = args["verbose"]
+    no_gui = args["no_gui"]
     gpio_ui = args["gpio_ui"]
     cmd_ui = args["cmd_ui"]
     number_of_matches = args["n_matches"]
@@ -278,7 +279,7 @@ def main():
             image = cv2.imread("%s/%s/%s.jpg" % (data_source_map, description.key, description.index))
             template = frames[best_match[0]]
 
-            if image is not None:
+            if image is not None and not no_gui:
                 gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
                 keypoints = detector.detect(gray_image)
 
@@ -294,7 +295,7 @@ def main():
 
     vs.stop()
 
-    if not args["no_gui"] and len(statistics) > 0:
+    if not no_gui and len(statistics) > 0:
         if args["data"] is not None:
             print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image '
                   'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
