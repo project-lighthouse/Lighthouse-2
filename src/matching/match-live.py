@@ -1,6 +1,7 @@
 import argparse
 import cv2
 import datetime
+import numpy
 import os
 import sys
 import time
@@ -137,7 +138,6 @@ def main():
 
     statistics = []
     frames = []
-    best_match = None
     best_score = -1
 
     while True:
@@ -167,7 +167,7 @@ def main():
 
                     print("\033[92mImage successfully added (now %s images known)\033[0m" % len(image_descriptions))
 
-            command = input("Enter command (eg. c - capture, s - show): ")
+            command = input("Enter command (eg. c - capture, s - show, e - exit): ")
             if command == "c":
                 break
             elif command == "s":
@@ -179,6 +179,9 @@ def main():
                     cv2.waitKey(0)
                     cv2.destroyWindow("frame")
                     cv2.waitKey(0)
+            elif command == "e":
+                vs.stop()
+                exit(0)
             else:
                 print("Unknown command: %s" % command)
 
@@ -219,14 +222,12 @@ def main():
             if verbose:
                 print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
-            # If we can't extract at least of 80% of requested keypoints then it's a bad frame, let's skip.
-            # if len(template_keypoints) /
-
             frame_index = len(frames)
 
             # loop over the images to find the template in
             for idx, image_description in enumerate(image_descriptions):
-                images_with_same_key = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
+                images_with_same_key = matcher.knnMatch(template_descriptors,
+                                                        trainDescriptors=image_description.descriptors, k=2)
 
                 if verbose:
                     print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(
@@ -255,7 +256,9 @@ def main():
                 if matches_count == 0:
                     score = 0
                 else:
-                    score = matches_count / float(len(image_description.descriptors)) * \
+                    number_of_image_descriptors = len(image_description.descriptors)
+                    score = (1 - numpy.absolute(len(template_descriptors) - number_of_image_descriptors) /
+                             number_of_image_descriptors) * \
                             (good_matches_count / float(matches_count) * 100) + histogram_comparison_result
 
                 statistics.append((frame_index, idx, images_with_same_key, good_matches, histogram_comparison_result,
@@ -314,8 +317,8 @@ def main():
                   'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
                   'etc.)!\033[0m'.format(args["data"]))
 
-        for idx, (template, template_keypoints, description, images_with_same_key, good_matches, histogram_comparison_result,
-                  score) in enumerate(statistics[:number_of_matches]):
+        for idx, (template, template_keypoints, description, images_with_same_key, good_matches,
+                  histogram_comparison_result, score) in enumerate(statistics[:number_of_matches]):
             image = cv2.imread(description.key)
             gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             keypoints = detector.detect(gray_image)
