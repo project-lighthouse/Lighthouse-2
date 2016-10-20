@@ -49,7 +49,7 @@ parser.add_argument('--dump-raw-video', help='Write raw captured video to this f
 
 group = parser.add_mutually_exclusive_group(required=False)
 group.add_argument('--video-acquisition-autostart', help='Start capturing immediately (default).', dest='autostart', action='store_true')
-group.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You''ll need a keyboard to start processing.', dest='autostart', action='store_false')
+group.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You\'ll need a keyboard to start processing.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
 
 parser.add_argument('--video-width', help='Video width for capture (default: 320).', default=320, type=int)
