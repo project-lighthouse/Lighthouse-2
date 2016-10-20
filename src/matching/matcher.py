@@ -160,6 +160,7 @@ def load_db(args):
     """ Load the database from directory args['data'].
     load_db(args) -> [ImageDescription]
     """
+    feature_extractor = FeatureExtractor(args['verbose'])
     return feature_extractor.deserialize(args["data"])
 
 def find_closest_match(images, args):
