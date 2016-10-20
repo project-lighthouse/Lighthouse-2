@@ -26,14 +26,16 @@ parser.set_defaults(match_with_db=True)
 #
 # Image acquisition from a video source.
 #
+# Default options should generally be fine, additional options are provided to help with testing.
+#
 
 parser.add_argument('--video-source', help='Use this video source for image capture (default: built-in cam).', default=0)
 parser.add_argument('--image-source', help='Use this image instead of a video source. Can be specified multiple times. Incompatible with --video-source.', action='append')
 # FIXME: Check that we don't have both --video-source and --image-source.
 parser.add_argument('--dump-raw-video', help='Write raw captured video to this file (default: none).', default=None)
 
-parser.add_argument('--video-autostart-acquisition', help='Start capturing immediately (default).', dest='autostart', action='store_true')
-parser.add_argument('--no-video-autostart-acquisition', help='Do not start capturing immediately. You''ll need a keyboard to start processing.', dest='autostart', action='store_false')
+parser.add_argument('--video-acquisition-autostart', help='Start capturing immediately (default).', dest='autostart', action='store_true')
+parser.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You''ll need a keyboard to start processing.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
 
 parser.add_argument('--video-width', help='Video width for capture (default: 320).', default=320, type=int)
@@ -51,14 +53,14 @@ parser.set_defaults(stabilize=False)
 
 
 #
-# Extracting the highest quality matches.
+# Customizing how images are extracted from videos.
 #
 
 parser.add_argument('--objects-prefix', help='Write captured objects to this destination (default: none).', default=None)
 parser.add_argument('--masks-prefix', help='Write captured masks (before preprocessing) to this destination (default: none).', default=None)
 parser.add_argument('--keep', help='Number of "best results" to keep from an image. Only makes sense if --object-prefix and possibly --masks-prefix are specified (default: 3).', default=3, type=int)
 
-parser.add_argument('--blur', help='Blur radius (default: 15)', default=15, type=int)
+parser.add_argument('--blur', help='Blur radius (default: 15).', default=15, type=int)
 parser.add_argument('--min-size', help='Assume that everything with fewer pixels is a parasite (default: 100).', default=100, type=int)
 
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60).', default=60, type=int)
