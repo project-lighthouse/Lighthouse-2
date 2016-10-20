@@ -201,11 +201,12 @@ def find_closest_match(images, statistics, args):
             cv2.waitKey(0)
 
 def init(args):
+    global detector
     # Initialize the detector
     detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
                             surf_threshold=args['surf_threshold'])
-    detector, norm = get_detector(args['detector'], detector_options, args)
 
+    detector, norm = get_detector(args['detector'], detector_options, args)
 
 def main(args):
     start = time.time()
