@@ -26,7 +26,7 @@ def acquire(args):
     idle = True
     force_start = args['autostart']
 
-    # A buffer holding the frames. It will hold up to args['buffer'] framesselfself.
+    # A buffer holding the frames. It will hold up to args['acquisition_buffer_size'] framesselfself.
     frames = None
 
     # The size of the largest suffix of `frames` composed solely of stable frames.
@@ -80,21 +80,21 @@ def acquire(args):
             print("Video source closed.")
             break
 
-        if len(frames) > 0 and args['buffer_stable_frames'] > 0:
+        if len(frames) > 0 and args['acquisition_buffer_stable_frames'] > 0:
             diff = cv2.norm(frames[-1], current)
-            print("Diff: %d <? %d" % (diff, surface * args['buffer_stability']))
-            if diff <= surface * args['buffer_stability']:
+            print("Diff: %d <? %d" % (diff, surface * args['acquisition_buffer_stability']))
+            if diff <= surface * args['acquisition_buffer_stability']:
                 consecutive_stable_frames += 1
             else:
                 consecutive_stable_frames = 0
 
         # We are not done buffering.
         if args['verbose']:
-            print("Got %d/%d frames, %d/%d stable frames." % (len(frames), args['buffer'], consecutive_stable_frames, args['buffer_stable_frames']))
+            print("Got %d/%d frames, %d/%d stable frames." % (len(frames), args['acquisition_buffer_size'], consecutive_stable_frames, args['acquisition_buffer_stable_frames']))
         frames.append(current)
 
-        if len(frames) >= args['buffer']:
-            if consecutive_stable_frames >= args['buffer_stable_frames']:
+        if len(frames) >= args['acquisition_buffer_size']:
+            if consecutive_stable_frames >= args['acquisition_buffer_stable_frames']:
                 # We have enough frames and enough stable frames.
                 if args['verbose']:
                     print("We have enough stable frames.")
@@ -204,7 +204,7 @@ def acquire(args):
 
         if score != surface:
             # We have captured the entire image. Definitely not a good thing to do.
-            if i > len(frames) * args['buffer_init'] or i + 1 == len(frames):
+            if i > len(frames) * args['acquisition_buffer_init'] or i + 1 == len(frames):
                 # We are done buffering
                 candidates.append((score, mask, bw_mask, original_mask, extracted, i, 0))
 

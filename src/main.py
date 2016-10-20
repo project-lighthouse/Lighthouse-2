@@ -79,10 +79,10 @@ parser.add_argument('--acquisition-keep-objects', metavar='N', help='Keep N "bes
 parser.add_argument('--acquisition-blur', metavar='SIZE', help='Blur radius (default: 15).', default=15, type=int)
 parser.add_argument('--acquisition-min-size', metavar='SIZE', help='Clean up the acquired image by assuming that everything speckle with fewer than N pixels is a parasite (default: 100).', default=100, type=int)
 
-parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60).', default=60, type=int)
-parser.add_argument('--buffer-stable-frames', help='Number of consecutive *stable* frames to capture before proceeding (default: 0).', default=0, type=int)
-parser.add_argument('--buffer-stability', help='Max proportion of the image that can change before we accept that a frame is stable (default: .1)', default=.1, type=float)
-parser.add_argument('--buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
+parser.add_argument('--acquisition-buffer-size', metavar='SIZE', help='Capture at least SIZE frames before proceeding (default: 60).', default=60, type=int)
+parser.add_argument('--acquisition-buffer-stable-frames', metavar='N', help='Wait for at least N *consecutive stable* frames before acquiring image (default: 0).', default=0, type=int)
+parser.add_argument('--acquisition-buffer-stability', help='Max proportion of the image that can change before we accept that a frame is stable (default: .1)', default=.1, type=float)
+parser.add_argument('--acquisition-buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
 group = parser.add_mutually_exclusive_group(required=False)
 group.add_argument('--fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
