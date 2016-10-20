@@ -18,7 +18,7 @@ With default arguments, the toolchain will extract objects from the webcam and c
 # Main interaction.
 #
 
-parser.add_argument('--add-to-db', metavar='label', help='Add the object to the database with a label (default: do not add to the database).', default=None)
+parser.add_argument('--add-to-db', metavar='LABEL', help='Add the object to the database with a label (default: do not add to the database).', default=None)
 group = parser.add_mutually_exclusive_group(required=False)
 group.add_argument('--match-with-db', help='Compare the object with objects already present in the database, outputting the most likely label.', dest='match_with_db', action='store_true')
 group.add_argument('--no-match-with-db', help='Compare the object with objects already present in the database, outputting the most likely label.', dest='match_with_db', action='store_false')
