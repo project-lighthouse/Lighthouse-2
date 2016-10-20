@@ -168,12 +168,10 @@ def find_closest_match(images, args):
     find_closest_match([image]) -> ?"""
 
     # We first need to load the db.
-    statistics, ref_images = annotate_images(load_db(args))
+    statistics, ref_images = annotate_images(load_db(args), args)
 
     # Sort by the largest number of "good" matches (6th element (zero based index = 5) of the tuple).
     statistics = sorted(statistics, key=lambda arguments: arguments[5], reverse=True)
-
-    print("\033[94mFull matching has been done in %s seconds.\033[0m" % (time.time() - matching_start))
 
     for idx, (image_index, images_with_same_key, good_matches, histogram_comparison_result, score) in \
             enumerate(statistics[:10]):
