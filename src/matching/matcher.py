@@ -65,28 +65,28 @@ def annotate_images(images, args):
     """Convert images into a processed format supporting fast comparison with other images.
     annotate_images([images], args) -> [statistics], [annotated_images]"""
     statistics = []
-    for image in images:
+    for template in images:
         gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
-        if verbose:
+        if args['verbose']:
             print('Template loaded: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
         template_histogram = cv2.calcHist([template], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
         template_histogram = cv2.normalize(template_histogram, template_histogram).flatten()
 
-        if verbose:
+        if args['verbose']:
             print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
         (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
 
-        if verbose:
+        if args['verbose']:
             print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
 
         # loop over the images to find the template in
         for idx, image_description in enumerate(images):
             images_with_same_key = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
 
-            if verbose:
+            if args['verbose']:
                 print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(
                     image_description.key, datetime.datetime.now()))
 
@@ -96,7 +96,7 @@ def annotate_images(images, args):
                 if len(m) == 2 and m[0].distance < ratio_test_coefficient * m[1].distance:
                     good_matches.append([m[0]])
 
-            if verbose:
+            if args['verbose']:
                 print('{} good matches filtered ({} good matches): {:%H:%M:%S.%f}'.format(image_description.key,
                                                                                           len(good_matches),
                                                                                           datetime.datetime.now()))
@@ -104,7 +104,7 @@ def annotate_images(images, args):
             histogram_comparison_result = cv2.compareHist(template_histogram, image_description.histogram,
                                                           cv2.HISTCMP_CORREL)
 
-            if verbose:
+            if args['verbose']:
                 print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(
                     image_description.key, datetime.datetime.now()))
             good_matches_count = len(good_matches)
@@ -124,24 +124,27 @@ def annotate_images(images, args):
 
 def add_captures(captures, key, args):
     """Add images to the database.
-    add_images(images, description, args)"""
-    images_with_same_key = [x for x in images if x.key == key]
+    add_images([image], label, args)"""
 
-    image_description = ImageDescription(key, len(images_with_same_key), frame['descriptors'],
-                                         frame['histogram'])
-    images.append(image_description)
+    for image in captures:
+        images_with_same_key = [x for x in images if x.key == key]
 
-    # save image
-    db_path = args["db_path"]
-    if db_path is not None:
-        key_path = "%s/%s" % (db_path, image_description.key)
-        if not os.path.exists(key_path):
-            os.makedirs(key_path)
-        cv2.imwrite("%s/%s.png" % (key_path, image_description.index), frame['frame'])
+        frame = annotate_images(captures, args)
+        image_description = ImageDescription(key, len(images_with_same_key), frame['descriptors'],
+                                             frame['histogram'])
+        images.append(image_description)
 
-    # FIXME: Also store histograms.
+        # save image
+        db_path = args["db_path"]
+        if db_path is not None:
+            key_path = "%s/%s" % (db_path, image_description.key)
+            if not os.path.exists(key_path):
+                os.makedirs(key_path)
+            cv2.imwrite("%s/%s.png" % (key_path, image_description.index), frame['frame'])
 
-    print("\033[92mImage successfully added\033[0m")
+        # FIXME: Also store histograms.
+
+        print("\033[92mImage successfully added\033[0m")
 
 def rebuild_db(args):
     """ Rebuild the database from directory args['images']. """
@@ -207,7 +210,6 @@ def init(args):
 def main(args):
     start = time.time()
 
-    verbose = args["verbose"]
     cmd_ui = args["cmd_ui"]
     number_of_matches = args["n_matches"]
     ratio_test_coefficient = args["ratio_test_k"]
