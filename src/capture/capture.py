@@ -250,7 +250,7 @@ def acquire(args):
             cv2.imwrite(dest, best_original_mask)
 
     cv2.destroyAllWindows()
-    results
+    return results
 
 
 def stabilize(frames):
