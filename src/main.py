@@ -19,8 +19,9 @@ With default arguments, the toolchain will extract objects from the webcam and c
 #
 
 parser.add_argument('--add-to-db', metavar='label', help='Add the object to the database with a label (default: do not add to the database).', default=None)
-parser.add_argument('--match-with-db', help='Compare the object with objects already present in the database, outputting the most likely label.', dest='match_with_db', action='store_true')
-parser.add_argument('--no-match-with-db', help='Compare the object with objects already present in the database, outputting the most likely label.', dest='match_with_db', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--match-with-db', help='Compare the object with objects already present in the database, outputting the most likely label.', dest='match_with_db', action='store_true')
+group.add_argument('--no-match-with-db', help='Compare the object with objects already present in the database, outputting the most likely label.', dest='match_with_db', action='store_false')
 parser.set_defaults(match_with_db=True)
 
 #
@@ -29,13 +30,15 @@ parser.set_defaults(match_with_db=True)
 # Default options should generally be fine, additional options are provided to help with testing.
 #
 
-parser.add_argument('--video-source', help='Use this video source for image capture (default: built-in cam).', default=0)
-parser.add_argument('--image-source', help='Use this image instead of a video source. Can be specified multiple times. Incompatible with --video-source.', action='append')
-# FIXME: Check that we don't have both --video-source and --image-source.
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--video-source', help='Use this video source for image capture (default: built-in cam).', default=0)
+group.add_argument('--image-source', help='Use this image instead of a video source. Can be specified multiple times. Incompatible with --video-source.', action='append')
+
 parser.add_argument('--dump-raw-video', help='Write raw captured video to this file (default: none).', default=None)
 
-parser.add_argument('--video-acquisition-autostart', help='Start capturing immediately (default).', dest='autostart', action='store_true')
-parser.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You''ll need a keyboard to start processing.', dest='autostart', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--video-acquisition-autostart', help='Start capturing immediately (default).', dest='autostart', action='store_true')
+group.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You''ll need a keyboard to start processing.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
 
 parser.add_argument('--video-width', help='Video width for capture (default: 320).', default=320, type=int)
@@ -46,10 +49,12 @@ parser.add_argument('--video-height', help='Video height for capture (default: 2
 # CAVEAT: Highly experimental, you probably shouldn't use it.
 #
 
-parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
-parser.add_argument('--video-stabilize', help='Stabilize video.', dest='stabilize', action='store_true')
-parser.add_argument('--no-video-stabilize', help='Do not stabilize video (default).', dest='stabilize', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--video-stabilize', help='Stabilize video.', dest='stabilize', action='store_true')
+group.add_argument('--no-video-stabilize', help='Do not stabilize video (default).', dest='stabilize', action='store_false')
 parser.set_defaults(stabilize=False)
+
+parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
 
 
 #
@@ -68,25 +73,30 @@ parser.add_argument('--buffer-stable-frames', help='Number of consecutive *stabl
 parser.add_argument('--buffer-stability', help='Max proportion of the image that can change before we accept that a frame is stable (default: .1)', default=.1, type=float)
 parser.add_argument('--buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
-parser.add_argument('--fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
-parser.add_argument('--no-fill', help='Do not attempt to remove holes from the captured image (default).', dest='fill_holes', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
+group.add_argument('--no-fill', help='Do not attempt to remove holes from the captured image (default).', dest='fill_holes', action='store_false')
 parser.set_defaults(fill_holes=False)
 
-parser.add_argument('--remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
-parser.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
+group.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
 parser.set_defaults(remove_shadows=False)
 
-parser.add_argument('--contours-prefix', help='Write contours to this destination (default: none).', default=None)
-parser.add_argument('--use-contour', help='Use contours to turn the image into a set of polygons instead of a cloud of points (default).', dest='use_contour', action='store_true')
-parser.add_argument('--no-use-contour',help='Produce a cloud of points.', dest='use_contour', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--use-contour', help='Use contours to turn the image into a set of polygons instead of a cloud of points (default).', dest='use_contour', action='store_true')
+group.add_argument('--no-use-contour',help='Produce a cloud of points.', dest='use_contour', action='store_false')
 parser.set_defaults(use_contour=True)
+
+parser.add_argument('--contours-prefix', help='Write contours to this destination (default: none).', default=None)
 
 #
 # General.
 #
 
-parser.add_argument('--gui', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
-parser.add_argument('--no-gui', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--gui', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
+group.add_argument('--no-gui', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
 parser.set_defaults(show=True)
 
 parser.add_argument('--verbose', help='Increase output verbosity', dest='verbose', action='store_true')
