@@ -141,7 +141,6 @@ print ("Args: %s" % args)
 
 
 def main():
-    print("capture: %s" % dir(capture))
     capture.init(args)
     matcher.init(args)
 
