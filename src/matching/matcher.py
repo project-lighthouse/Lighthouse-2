@@ -132,9 +132,9 @@ def add_captures(captures, key, args):
     images.append(image_description)
 
     # save image
-    data_source_map = args["data_source_map"]
-    if data_source_map is not None:
-        key_path = "%s/%s" % (data_source_map, image_description.key)
+    db_path = args["db_path"]
+    if db_path is not None:
+        key_path = "%s/%s" % (db_path, image_description.key)
         if not os.path.exists(key_path):
             os.makedirs(key_path)
         cv2.imwrite("%s/%s.png" % (key_path, image_description.index), frame['frame'])
@@ -157,6 +157,12 @@ def load_db(args):
     return feature_extractor.deserialize(args["data"])
 
 def find_closest_match(images, statistics, args):
+    """ Load the database, find the closest images.
+    find_closest_match([image]) -> ?"""
+
+    # We first need to load the db.
+    statistics, ref_images = annotate_images(load_db(args))
+
     # Sort by the largest number of "good" matches (6th element (zero based index = 5) of the tuple).
     statistics = sorted(statistics, key=lambda arguments: arguments[5], reverse=True)
 
@@ -179,7 +185,7 @@ def find_closest_match(images, statistics, args):
     else:
         description = images[best_match[1]]
         print("Known object (score %s) - %s" % (best_score, description.key))
-        image = cv2.imread("%s/%s/%s.png" % (data_source_map, description.key, description.index))
+        image = cv2.imread("%s/%s/%s.png" % (db_path, description.key, description.index))
         template = frames[best_match[0]]
 
         if image is not None:

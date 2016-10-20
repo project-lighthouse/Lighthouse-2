@@ -25,6 +25,17 @@ group.add_argument('--no-match-with-db', help='Compare the object with objects a
 parser.set_defaults(match_with_db=True)
 
 #
+# Customizing interactions with the db.
+#
+group = parser.add_mutually_exclusive_group(required=False)
+group.add_argument('--rebuild-db', help='Rebuild the database.', dest='rebuild_db', action='store_true')
+group.add_argument('--no-rebuild-db', help='Do not rebuild the database (default).', dest='rebuild_db', action='store_false')
+parser.set_defaults(rebuild_db=False)
+
+parser.add_argument('--db-path', help='Path to the database of images (default: ~/.lighthouse/records).', default='~/.lighthouse/records')
+
+
+#
 # Image acquisition from a video source.
 #
 # Default options should generally be fine, additional options are provided to help with testing.
@@ -110,7 +121,6 @@ parser.add_argument('-s', '--source', help='Video to use (default: built-in cam)
 # group = parser.add_mutually_exclusive_group(required=True)
 # group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
 # group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
-parser.add_argument('--data-source-map', help='Path to the folder with the images that data file based on') #FIXME: Find a better name / good default.
 parser.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
                     default='orb')
 parser.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
@@ -160,6 +170,9 @@ def main():
         # Capture a video, either from the webcam or from a video file.
         # This also handles stabilization.
         images = capture.acquire(args)
+
+    if args['rebuild_db']:
+        matcher.rebuild_db(args)
 
     if args['add_to_db']:
         matcher.add_captures(images, args['add_to_db'], args)
