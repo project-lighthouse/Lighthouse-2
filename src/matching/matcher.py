@@ -157,11 +157,11 @@ def rebuild_db(args):
     return feature_extractor.extract(args["images"], args['detector'], detector_options)
 
 def load_db(args):
-    """ Load the database from directory args['data'].
+    """ Load the database from directory args['db_path'].
     load_db(args) -> [ImageDescription]
     """
     feature_extractor = FeatureExtractor(args['verbose'])
-    return feature_extractor.deserialize(args["data"])
+    return feature_extractor.deserialize(args["db_path"])
 
 def find_closest_match(images, args):
     """ Load the database, find the closest images.
