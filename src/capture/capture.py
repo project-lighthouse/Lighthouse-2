@@ -133,8 +133,8 @@ def acquire(args):
             mask = cv2.bitwise_and(mask, 255)
 
         # Smoothen a bit the mask to get back some of the missing pixels
-        if args['acquisition-blur'] > 0:
-            mask = cv2.blur(mask, (args['acquisition-blur'], args['acquisition-blur']))
+        if args['acquisition_blur'] > 0:
+            mask = cv2.blur(mask, (args['acquisition_blur'], args['acquisition_blur']))
 
         ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
@@ -211,7 +211,7 @@ def acquire(args):
         latest_score = score
 
     candidates.sort(key=lambda tuple: tuple[0], reverse=True)
-    candidates = candidates[:args['acquisition-keep-objects']]
+    candidates = candidates[:args['acquisition_keep_objects']]
 
     results = []
 

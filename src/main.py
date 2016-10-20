@@ -143,10 +143,10 @@ group.add_argument('--cmd-ui', help='Use command line interface to manage the ap
 # Ensure consistency.
 #
 args = vars(parser.parse_args())
-if args['buffer_init'] <= 0:
-    args['buffer_init'] = .01
-elif args['buffer_init'] >= 1:
-    args['buffer_init'] = .99
+if args['acquisition_buffer_init'] <= 0:
+    args['acquisition_buffer_init'] = .01
+elif args['acquisition_buffer_init'] >= 1:
+    args['acquisition_buffer_init'] = .99
 print ("Args: %s" % args)
 
 
