@@ -65,6 +65,8 @@ def annotate_images(images, args):
     """Convert images into a processed format supporting fast comparison with other images.
     annotate_images([images], args) -> [statistics], [annotated_images]"""
     statistics = []
+    matcher = get_matcher(args['matcher'], norm, args)
+
     for template in images:
         gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
@@ -202,6 +204,7 @@ def find_closest_match(images, statistics, args):
 
 def init(args):
     global detector
+    global norm
     # Initialize the detector
     detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
                             surf_threshold=args['surf_threshold'])
