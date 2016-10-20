@@ -128,10 +128,11 @@ def add_captures(captures, key, args):
     """Add images to the database.
     add_images([image], label, args)"""
 
-    for image in captures:
+    statistics, annotated_images = annotate_images(captures, args)
+
+    for frame in annotated_images:
         images_with_same_key = [x for x in images if x.key == key]
 
-        frame = annotate_images(captures, args)
         image_description = ImageDescription(key, len(images_with_same_key), frame['descriptors'],
                                              frame['histogram'])
         images.append(image_description)
