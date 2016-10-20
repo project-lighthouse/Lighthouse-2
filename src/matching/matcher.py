@@ -162,7 +162,7 @@ def load_db(args):
     """
     return feature_extractor.deserialize(args["data"])
 
-def find_closest_match(images, statistics, args):
+def find_closest_match(images, args):
     """ Load the database, find the closest images.
     find_closest_match([image]) -> ?"""
 

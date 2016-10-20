@@ -178,9 +178,9 @@ def main():
         matcher.add_captures(images, args['add_to_db'], args)
 
     if args['match_with_db']:
-        # FIXME: Compare with existing images.
-        # FIXME: I don't understand that part of the code well enough.
-        results = matcher.find_closest_match(images)
+        results = matcher.find_closest_match(images, args)
+
+    # FIXME: Do something with the results.
 
 if __name__ == '__main__':
     sys.exit(main())
