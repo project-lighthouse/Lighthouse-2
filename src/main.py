@@ -83,8 +83,8 @@ parser.set_defaults(use_contour=True)
 # General.
 #
 
-parser.add_argument('--show', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
-parser.add_argument('--no-show', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
+parser.add_argument('--gui', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
+parser.add_argument('--no-gui', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
 parser.set_defaults(show=True)
 
 parser.add_argument('--verbose', help='Increase output verbosity', dest='verbose', action='store_true')
@@ -113,7 +113,6 @@ parser.add_argument('--akaze-n-channels', help='Number of channels used in AKAZE
 parser.add_argument('--surf-threshold',
                     help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)',
                     default=1000, type=int)
-parser.add_argument('--no-gui', help='Avoid using of any GUI elements', action='store_true')
 group = parser.add_mutually_exclusive_group()
 group.add_argument('--cmd-ui', help='Use command line interface to manage the app', action='store_true')
 

@@ -226,7 +226,7 @@ def main(args):
 
     vs.stop()
 
-    if not args["no_gui"] and len(statistics) > 0:
+    if args["show"] and len(statistics) > 0:
         if args["data"] is not None:
             print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image '
                   'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
