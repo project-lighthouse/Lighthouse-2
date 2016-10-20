@@ -85,21 +85,21 @@ parser.add_argument('--acquisition-buffer-stability', help='Max proportion of th
 parser.add_argument('--acquisition-buffer-init', help='Proportion of frames to keep for initializing background elimination, must be in ]0, 1[ (default: .9)', default=.9, type=float)
 
 group = parser.add_mutually_exclusive_group(required=False)
-group.add_argument('--fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
-group.add_argument('--no-fill', help='Do not attempt to remove holes from the captured image (default).', dest='fill_holes', action='store_false')
+group.add_argument('--acquisition-fill', help='Attempt to remove holes from the captured image.', dest='fill_holes', action='store_true')
+group.add_argument('--no-acquisition-fill', help='Do not attempt to remove holes from the captured image (default).', dest='fill_holes', action='store_false')
 parser.set_defaults(fill_holes=False)
 
 group = parser.add_mutually_exclusive_group(required=False)
-group.add_argument('--remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
-group.add_argument('--no-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
+group.add_argument('--acquisition-remove-shadows', help='Pixels that look like shadows should not be considered part of the extracted object.', dest='remove_shadows', action='store_true')
+group.add_argument('--no-acquisition-remove-shadows', help='Pixels that look like shadows should be considered part of the extracted object (default).', dest='remove_shadows', action='store_false')
 parser.set_defaults(remove_shadows=False)
 
 group = parser.add_mutually_exclusive_group(required=False)
-group.add_argument('--use-contour', help='Use contours to turn the image into a set of polygons instead of a cloud of points (default).', dest='use_contour', action='store_true')
-group.add_argument('--no-use-contour',help='Produce a cloud of points.', dest='use_contour', action='store_false')
+group.add_argument('--acquisition-use-contour', help='Use contours to turn the image into a set of polygons instead of a cloud of points (default).', dest='use_contour', action='store_true')
+group.add_argument('--no-acquisition-use-contour',help='Produce a cloud of points.', dest='use_contour', action='store_false')
 parser.set_defaults(use_contour=True)
 
-parser.add_argument('--contours-prefix', help='Write contours to this destination (default: none).', default=None)
+parser.add_argument('--acquisition-dump-contours-prefix', help='Write contours to this destination (default: none).', default=None)
 
 #
 # General.

@@ -190,8 +190,8 @@ def acquire(args):
                     hull = cv2.convexHull(cnt)
                     cv2.fillPoly(bw_mask, [hull], 255, 8)
 
-            if args['contours_prefix']:
-                dest = "%s_%d.png" % (args['contours_prefix'], i)
+            if args['acquisition_dump_contours_prefix']:
+                dest = "%s_%d.png" % (args['acquisition_dump_contours_prefix'], i)
                 print("Writing contours to %s." % dest)
                 cv2.imwrite(dest, bw_mask)
 
