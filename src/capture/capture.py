@@ -133,8 +133,8 @@ def acquire(args):
             mask = cv2.bitwise_and(mask, 255)
 
         # Smoothen a bit the mask to get back some of the missing pixels
-        if args['blur'] > 0:
-            mask = cv2.blur(mask, (args['blur'], args['blur']))
+        if args['acquisition-blur'] > 0:
+            mask = cv2.blur(mask, (args['acquisition-blur'], args['acquisition-blur']))
 
         ret, mask = cv2.threshold(mask, 1, 255, cv2.THRESH_BINARY)
 
@@ -186,7 +186,7 @@ def acquire(args):
             # FIXME: We could remove small contours (here or later)
             bw_mask = numpy.zeros((height, width), numpy.uint8)
             for cnt in contours:
-                if cv2.contourArea(cnt) > args['min_size'] or 0:
+                if cv2.contourArea(cnt) > args['acquisition_min_size'] or 0:
                     hull = cv2.convexHull(cnt)
                     cv2.fillPoly(bw_mask, [hull], 255, 8)
 
@@ -211,7 +211,7 @@ def acquire(args):
         latest_score = score
 
     candidates.sort(key=lambda tuple: tuple[0], reverse=True)
-    candidates = candidates[:args['keep']]
+    candidates = candidates[:args['acquisition-keep-objects']]
 
     results = []
 
@@ -221,7 +221,7 @@ def acquire(args):
         print ("Best score %d/%s" % (best_score, best_perimeter))
 
 # Get rid of small components
-        if args['min_size'] > 0:
+        if args['acquisition_min_size'] > 0:
             number, components = cv2.connectedComponents(best_bw_mask)
             flattened = components.flatten()
             stats = numpy.bincount(flattened)
@@ -230,7 +230,7 @@ def acquire(args):
             for i, stat in enumerate(stats):
                 if stat == 0:
                     continue
-                if stat < args['min_size']:
+                if stat < args['acquisition_min_size']:
                     kill_list = components == i
                     best_mask[kill_list] = 0
                     best_extracted[kill_list] = 0

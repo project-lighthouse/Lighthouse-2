@@ -72,12 +72,12 @@ parser.add_argument('--dump-stabilized', help='Write stabilized video to this fi
 # Customizing how images are extracted from videos.
 #
 
-parser.add_argument('--objects-prefix', help='Write captured objects to this destination (default: none).', default=None)
-parser.add_argument('--masks-prefix', help='Write captured masks (before preprocessing) to this destination (default: none).', default=None)
-parser.add_argument('--keep', help='Number of "best results" to keep from an image. Only makes sense if --object-prefix and possibly --masks-prefix are specified (default: 3).', default=3, type=int)
+parser.add_argument('--acquisition-dump-objects-prefix', help='Write captured objects to this destination (default: none).', default=None, dest='objects_prefix')
+parser.add_argument('--acquisition-dump-masks-prefix', help='Write captured masks (before preprocessing) to this destination (default: none).', default=None, dest='masks_prefix')
+parser.add_argument('--acquisition-keep-objects', metavar='N', help='Keep N "best results" (default: 3) from the video source.', default=3, type=int)
 
-parser.add_argument('--blur', help='Blur radius (default: 15).', default=15, type=int)
-parser.add_argument('--min-size', help='Assume that everything with fewer pixels is a parasite (default: 100).', default=100, type=int)
+parser.add_argument('--acquisition-blur', metavar='SIZE', help='Blur radius (default: 15).', default=15, type=int)
+parser.add_argument('--acquisition-min-size', metavar='SIZE', help='Clean up the acquired image by assuming that everything speckle with fewer than N pixels is a parasite (default: 100).', default=100, type=int)
 
 parser.add_argument('--buffer', help='Number of frames to capture before proceeding (default: 60).', default=60, type=int)
 parser.add_argument('--buffer-stable-frames', help='Number of consecutive *stable* frames to capture before proceeding (default: 0).', default=0, type=int)
