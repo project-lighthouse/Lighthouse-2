@@ -61,13 +61,13 @@ def get_matcher(matcher_type, norm, args):
     return matcher
 
 
-def annotate_images(images, args):
+def annotate_images(captures, args):
     """Convert images into a processed format supporting fast comparison with other images.
     annotate_images([images], args) -> [statistics], [annotated_images]"""
     statistics = []
     matcher = get_matcher(args['matcher'], norm, args)
 
-    for template in images:
+    for template in captures:
         gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
         if args['verbose']:
