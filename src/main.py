@@ -118,10 +118,6 @@ parser.set_defaults(verbose=False)
 
 group = parser.add_argument_group(title="More options (TODO: integrate these somewhere)")
 
-group.add_argument('-s', '--source', help='Video to use (default: built-in cam)', default=0)
-# group = parser.add_mutually_exclusive_group(required=True)
-# group.add_argument('-i', '--images', help='Path to the folder with the images we would like to match')
-# group.add_argument('-d', '--data', help='Path to the folder with the images we would like to match')
 group.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
                     default='orb')
 group.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
