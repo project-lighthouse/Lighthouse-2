@@ -101,6 +101,17 @@ parser.set_defaults(use_contour=True)
 parser.add_argument('--acquisition-dump-contours-prefix', help='Write contours to this destination (default: none).', default=None)
 
 #
+# Customizing how images are compared to each other.
+#
+
+group = parser.add_argument_group(title="Finding objects in the database")
+
+group.add_argument('--find-detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
+                    default='orb')
+group.add_argument('--find-matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
+                    default='brute-force')
+
+#
 # General.
 #
 
@@ -118,10 +129,6 @@ parser.set_defaults(verbose=False)
 
 group = parser.add_argument_group(title="More options (TODO: integrate these somewhere)")
 
-group.add_argument('--detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
-                    default='orb')
-group.add_argument('--matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
-                    default='brute-force')
 group.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
 group.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
 group.add_argument('--n-frames', help='How many frames to capture for matching (default: 100)', default=100, type=int)

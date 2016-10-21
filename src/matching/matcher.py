@@ -35,7 +35,7 @@ def get_detector(detector_type, options, args):
         # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
         detector = cv2.ORB_create(nfeatures=options['orb_n_features'])
         norm = cv2.NORM_HAMMING
-    elif args['detector'] == 'akaze':
+    elif args['find_detector'] == 'akaze':
         detector = cv2.AKAZE_create(descriptor_channels=options['akaze_n_channels'])
         norm = cv2.NORM_HAMMING
     else:
@@ -65,7 +65,7 @@ def annotate_images(captures, args):
     """Convert images into a processed format supporting fast comparison with other images.
     annotate_images([images], args) -> [statistics], [annotated_images]"""
     statistics = []
-    matcher = get_matcher(args['matcher'], norm, args)
+    matcher = get_matcher(args['find_matcher'], norm, args)
 
     for template in captures:
         gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
@@ -151,10 +151,10 @@ def add_captures(captures, key, args):
 
 def rebuild_db(args):
     """ Rebuild the database from directory args['images']. """
-    matcher = get_matcher(args['matcher'], norm, args)
+    matcher = get_matcher(args['find_matcher'], norm, args)
 
     feature_extractor = FeatureExtractor(args['verbose'])
-    return feature_extractor.extract(args["images"], args['detector'], detector_options)
+    return feature_extractor.extract(args["images"], args['find_detector'], detector_options)
 
 def load_db(args):
     """ Load the database from directory args['db_path'].
@@ -209,7 +209,7 @@ def init(args):
     detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
                             surf_threshold=args['surf_threshold'])
 
-    detector, norm = get_detector(args['detector'], detector_options, args)
+    detector, norm = get_detector(args['find_detector'], detector_options, args)
 
 def main(args):
     start = time.time()
