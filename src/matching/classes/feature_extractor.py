@@ -49,7 +49,7 @@ class FeatureExtractor:
                 print('{} image\'s histogram calculated: {:%H:%M:%S.%f}'.format(image_set_path,
                                                                                 datetime.datetime.now()))
 
-            image_descriptions.append(ImageDescription(key, index, image_descriptors, image_histogram))
+            image_descriptions.append(ImageDescription(image_descriptors, image_histogram, key, index))
 
         if self.verbose:
             print('All images processed ({} images): {:%H:%M:%S.%f}'.format(len(image_descriptions),

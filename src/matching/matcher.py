@@ -1,41 +1,23 @@
-import argparse
 import cv2
-import datetime
+import numpy
 import os
-import sys
 import time
+from threading import Thread
 
 from classes.feature_extractor import FeatureExtractor
 from classes.video_stream import VideoStream
 from classes.image_description import ImageDescription
 
-is_raspberry_pi = os.uname()[1] == 'raspberrypi2'
-
-detector = None
-norm = None
-
-# Images stored in the database.
-#
-# List of ImageDescription
-images = []
-
-
-# Python 2.7 uses raw_input while Python 3 deprecated it in favor of input.
-try:
-    input = raw_input
-except NameError:
-    pass
-
 FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
 
 
-def get_detector(detector_type, options, args):
+def get_detector(detector_type, options):
     if detector_type == 'orb':
         # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the image.
         detector = cv2.ORB_create(nfeatures=options['orb_n_features'])
         norm = cv2.NORM_HAMMING
-    elif args['find_detector'] == 'akaze':
+    elif detector_type == 'akaze':
         detector = cv2.AKAZE_create(descriptor_channels=options['akaze_n_channels'])
         norm = cv2.NORM_HAMMING
     else:
@@ -45,7 +27,7 @@ def get_detector(detector_type, options, args):
     return detector, norm
 
 
-def get_matcher(matcher_type, norm, args):
+def get_matcher(matcher_type, norm):
     if matcher_type == 'brute-force':
         # Create Brute Force matcher.
         matcher = cv2.BFMatcher(norm)
@@ -61,201 +43,173 @@ def get_matcher(matcher_type, norm, args):
     return matcher
 
 
-def annotate_images(captures, args):
-    """Convert images into a processed format supporting fast comparison with other images.
-    annotate_images([images], args) -> [statistics], [annotated_images]"""
-    statistics = []
-    matcher = get_matcher(args['find_matcher'], norm, args)
+def serialize_db(db, feature_extractor, file_name, verbose):
+    serialize_start = time.time()
+    feature_extractor.serialize(db, file_name)
+    if verbose:
+        print('Database has been serialized in %s seconds.' % (time.time() - serialize_start))
 
-    for template in captures:
-        gray_template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
-        if args['verbose']:
-            print('Template loaded: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+class Matcher:
+    def __init__(self, options):
+        self.options = options
+        # Initialize the detector
+        detector_options = dict(orb_n_features=options['orb_n_features'], akaze_n_channels=options['akaze_n_channels'],
+                                surf_threshold=options['surf_threshold'])
 
-        template_histogram = cv2.calcHist([template], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-        template_histogram = cv2.normalize(template_histogram, template_histogram).flatten()
+        self._options = options
+        self._verbose = options['verbose']
+        self._detector, norm = get_detector(options['find_detector'], detector_options)
+        self._matcher = get_matcher(options['find_matcher'], norm)
+        self._feature_extractor = FeatureExtractor(options['verbose'])
+        self._db = None
 
-        if args['verbose']:
-            print('Template histogram calculated: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+    def preload_db(self):
+        """ Pre-loads the database from directory args['db_path'].
+        preload_db() -> ()
+        """
+        self._db = self._feature_extractor.deserialize(self._options['db_path'])
 
-        (template_keypoints, template_descriptors) = detector.detectAndCompute(gray_template, None)
+    def match(self):
+        """Finds the best match for the provided video frames in loaded database.
+            match() -> dict(score, db_image_description, frame, good_matches)"""
 
-        if args['verbose']:
-            print('Template keypoints have been detected: {:%H:%M:%S.%f}'.format(datetime.datetime.now()))
+        ratio_test_coefficient = self._options['ratio_test_k']
 
-        # loop over the images to find the template in
-        for idx, image_description in enumerate(images):
-            images_with_same_key = matcher.knnMatch(template_descriptors, trainDescriptors=image_description.descriptors, k=2)
+        stream_start = time.time()
 
-            if args['verbose']:
-                print('{} image\'s match is processed: {:%H:%M:%S.%f}'.format(
-                    image_description.key, datetime.datetime.now()))
+        vs = VideoStream(self._options['source']).start()
 
-            # Apply ratio test.
-            good_matches = []
-            for m in images_with_same_key:
-                if len(m) == 2 and m[0].distance < ratio_test_coefficient * m[1].distance:
-                    good_matches.append([m[0]])
+        if not vs.is_opened():
+            print('Error: unable to open video source')
+            return -1
 
-            if args['verbose']:
-                print('{} good matches filtered ({} good matches): {:%H:%M:%S.%f}'.format(image_description.key,
-                                                                                          len(good_matches),
-                                                                                          datetime.datetime.now()))
+        if self._verbose:
+            print('Video stream has been prepared in %s seconds.' % (time.time() - stream_start))
 
-            histogram_comparison_result = cv2.compareHist(template_histogram, image_description.histogram,
-                                                          cv2.HISTCMP_CORREL)
+        best_match = dict(score=0, db_image_description=None, frame=None, good_matches=None)
+        match_all_start = time.time()
 
-            if args['verbose']:
-                print('{} image\'s histogram difference is calculated: {:%H:%M:%S.%f}'.format(
-                    image_description.key, datetime.datetime.now()))
-            good_matches_count = len(good_matches)
-            matches_count = len(images_with_same_key)
+        # Capture "n_frames" frames, try to find match for every one and return match the best score.
+        for frame_index in range(0, self._options['n_frames']):
+            ret, frame = vs.read()
 
-            if matches_count == 0:
-                score = 0
-            else:
-                score = matches_count / float(len(image_description.descriptors)) * \
-                        (good_matches_count / float(matches_count) * 100) + histogram_comparison_result
+            if not ret:
+                print('No frames is available.')
+                break
 
-            statistics.append((idx, images_with_same_key, good_matches, histogram_comparison_result, score))
-            images.append({'frame': template, 'keypoints': template_keypoints, 'descriptors': template_descriptors,
-                       'histogram': template_histogram})
+            frame_description = self.get_image_description(frame)
 
-    return statistics, images
+            # Iterate through entire database and try to find the best match based on the "score" value.
+            match_frame_start = time.time()
+            for idx, db_image_description in enumerate(self._db):
+                matches = self._matcher.knnMatch(frame_description.descriptors, db_image_description.descriptors, k=2)
 
-def add_captures(captures, key, args):
-    """Add images to the database.
-    add_images([image], label, args)"""
+                # Apply ratio test.
+                good_matches = []
+                for match in matches:
+                    if len(match) == 2 and match[0].distance < ratio_test_coefficient * match[1].distance:
+                        good_matches.append([match[0]])
 
-    statistics, annotated_images = annotate_images(captures, args)
+                histogram_comparison_result = cv2.compareHist(frame_description.histogram,
+                                                              db_image_description.histogram, cv2.HISTCMP_CORREL)
 
-    for frame in annotated_images:
-        images_with_same_key = [x for x in images if x.key == key]
+                matches_count = len(matches)
+                if matches_count == 0:
+                    score = 0
+                else:
+                    good_matches_count = len(good_matches)
+                    db_image_descriptors_count = len(db_image_description.descriptors)
 
-        image_description = ImageDescription(key, len(images_with_same_key), frame['descriptors'],
-                                             frame['histogram'])
-        images.append(image_description)
+                    score = (1 - numpy.absolute(len(frame_description.descriptors) - db_image_descriptors_count) /
+                             db_image_descriptors_count) * \
+                            (good_matches_count / float(matches_count) * 100) + histogram_comparison_result
 
-        # save image
-        db_path = args["db_path"]
-        if db_path is not None:
-            key_path = "%s/%s" % (db_path, image_description.key)
+                if score > best_match['score']:
+                    best_match['score'] = score
+                    best_match['db_image_description'] = db_image_description
+                    best_match['frame'] = frame
+                    best_match['good_matches'] = good_matches
+
+            if self._verbose:
+                print('Frame %s is processed in %s seconds.' % (frame_index, time.time() - match_frame_start))
+
+        if self._verbose:
+            print('All frames are processed in %s seconds.' % (time.time() - match_all_start))
+
+        vs.stop()
+
+        return best_match
+
+    def get_image_description(self, image):
+        """Extracts image's feature keypoints and color histogram.
+                    get_image_description(image) -> ImageDescription"""
+
+        histogram_time = time.time()
+
+        # Calculate frame color histogram.
+        histogram = cv2.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+        histogram = cv2.normalize(histogram, histogram).flatten()
+
+        if self._verbose:
+            print('Image histogram calculated in %s seconds.' % (time.time() - histogram_time))
+
+        detector_time = time.time()
+
+        # Extract all possible keypoints from the frame.
+        (keypoints, descriptors) = self._detector.detectAndCompute(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), None)
+
+        if self._verbose:
+            print('Image keypoints extracted in %s seconds.' % (time.time() - detector_time))
+
+        return ImageDescription(descriptors, histogram)
+
+    def add_image_to_db(self, image, key):
+        """Extracts image's feature keypoints and color histogram and saves it to the database under specified key.
+           add_image_to_db(image, key) -> ()"""
+
+        # First let's extract image features.
+        image_description = self.get_image_description(image)
+
+        # Then let's find other existing images for this key.
+        images_with_same_key = [x for x in self._db if x.key == key]
+
+        # And fill in other required fields
+        image_description.key = key
+        image_description.index = len(images_with_same_key)
+
+        self._db.append(image_description)
+
+        # Serialize data to the disk.
+        Thread(target=serialize_db,
+               args=(self._db, self._feature_extractor, self._options['db_path'], self._verbose)).start()
+
+        # Save image itself if --data-source-map is provided.
+        data_source_map = self._options['data_source_map']
+        if data_source_map is not None:
+            key_path = '%s/%s' % (data_source_map, image_description.key)
             if not os.path.exists(key_path):
                 os.makedirs(key_path)
-            cv2.imwrite("%s/%s.png" % (key_path, image_description.index), frame['frame'])
+            cv2.imwrite('%s/%s.jpg' % (key_path, image_description.index), image)
 
-        # FIXME: Also store histograms.
+    def draw_match(self, match):
+        """Draws lines between matched keypoints in the db image and random frame using provided "match" dictionary.
+           draw_match(match) -> ()"""
+        data_source_map = self._options['data_source_map']
+        if data_source_map is None:
+            print('Required --data-source-map parameter is not provided, so match can not be drawn!')
+            return
 
-        print("\033[92mImage successfully added\033[0m")
+        db_image = cv2.imread('%s/%s/%s.jpg' % (data_source_map, match['db_image_description'].key,
+                                                match['db_image_description'].index))
+        if db_image is None:
+            print('Can not find image for the db image description in --data-source-map folder!')
+            return
 
-def rebuild_db(args):
-    """ Rebuild the database from directory args['images']. """
-    matcher = get_matcher(args['find_matcher'], norm, args)
+        db_image_keypoints = self._detector.detect(cv2.cvtColor(db_image, cv2.COLOR_BGR2GRAY))
+        frame_image_keypoints = self._detector.detect(cv2.cvtColor(match['frame'], cv2.COLOR_BGR2GRAY))
 
-    feature_extractor = FeatureExtractor(args['verbose'])
-    return feature_extractor.extract(args["images"], args['find_detector'], detector_options)
-
-def load_db(args):
-    """ Load the database from directory args['db_path'].
-    load_db(args) -> [ImageDescription]
-    """
-    feature_extractor = FeatureExtractor(args['verbose'])
-    return feature_extractor.deserialize(args["db_path"])
-
-def find_closest_match(images, args):
-    """ Load the database, find the closest images.
-    find_closest_match([image]) -> ?"""
-
-    # We first need to load the db.
-    statistics, ref_images = annotate_images(load_db(args), args)
-
-    # Sort by the largest number of "good" matches (6th element (zero based index = 5) of the tuple).
-    statistics = sorted(statistics, key=lambda arguments: arguments[5], reverse=True)
-
-    for idx, (image_index, images_with_same_key, good_matches, histogram_comparison_result, score) in \
-            enumerate(statistics[:10]):
-        description = images[image_index]
-
-        # Mark in green only `n-matches` first matches.
-        print("{}{}: {} - {} - {} - {}\033[0m".format('\033[92m' if idx < number_of_matches else '\033[91m',
-                                                      description.key, len(images_with_same_key), len(good_matches),
-                                                      histogram_comparison_result, score))
-
-    best_match = None if len(statistics) == 0 else statistics[0]
-    best_score = 0 if best_match is None else statistics[0][5]
-
-    if best_score < 5:
-        print("Don't know such object (score %s)" % best_score)
-    else:
-        description = images[best_match[1]]
-        print("Known object (score %s) - %s" % (best_score, description.key))
-        image = cv2.imread("%s/%s/%s.png" % (db_path, description.key, description.index))
-        template = frames[best_match[0]]
-
-        if image is not None:
-            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            keypoints = detector.detect(gray_image)
-
-            result_image = cv2.drawMatchesKnn(template['frame'], template['keypoints'], image, keypoints,
-                                              best_match[3], None, flags=2)
-            cv2.imshow("best-match", result_image)
-            cv2.waitKey(0)
-
-def init(args):
-    global detector
-    global norm
-    # Initialize the detector
-    detector_options = dict(orb_n_features=args['orb_n_features'], akaze_n_channels=args['akaze_n_channels'],
-                            surf_threshold=args['surf_threshold'])
-
-    detector, norm = get_detector(args['find_detector'], detector_options, args)
-
-def main(args):
-    start = time.time()
-
-    cmd_ui = args["cmd_ui"]
-    number_of_matches = args["n_matches"]
-    ratio_test_coefficient = args["ratio_test_k"]
-    number_of_frames = args["n_frames"]
-
-
-    extraction_start = time.time()
-
-    print("\033[94mTraining set has been prepared in %s seconds.\033[0m" % (time.time() - extraction_start))
-
-    statistics = []
-    frames = []
-    best_match = None
-    best_score = -1
-
-    while True:
-
-        if not gpio_ui and not cmd_ui:
-            break
-
-    print("\033[94mProgram has been executed in %s seconds.\033[0m" % (time.time() - start))
-
-    vs.stop()
-
-    if args["show"] and len(statistics) > 0:
-        if args["data"] is not None:
-            print('\033[93mWarning: Displaying of images side-by-side only works if "{}" is based on existing image '
-                  'files and created with the same options (--orb-n-features, --akaze-n-channels, --surf-threshold '
-                  'etc.)!\033[0m'.format(args["data"]))
-
-        for idx, (template, template_keypoints, description, images_with_same_key, good_matches, histogram_comparison_result,
-                  score) in enumerate(statistics[:number_of_matches]):
-            image = cv2.imread(description.key)
-            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            keypoints = detector.detect(gray_image)
-
-            result_image = cv2.drawMatchesKnn(template, template_keypoints, image, keypoints, good_matches, None,
-                                              flags=2)
-            cv2.imshow("Best match #" + str(idx + 1), result_image)
-
+        result_image = cv2.drawMatchesKnn(db_image, db_image_keypoints, match['frame'], frame_image_keypoints,
+                                          match['good_matches'], None, flags=2)
+        cv2.imshow('best-match', result_image)
         cv2.waitKey(0)
-
-
-if __name__ == '__main__':
-    sys.exit(main())
