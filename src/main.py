@@ -3,9 +3,10 @@
 import argparse
 import cv2
 import capture.capture as capture
-import matching.matcher as matcher
+from matching.matcher import Matcher
 import os
 import sys
+
 
 parser = argparse.ArgumentParser(description=
 """
@@ -33,8 +34,10 @@ group.add_argument('--rebuild-db', help='Rebuild the database.', dest='rebuild_d
 group.add_argument('--no-rebuild-db', help='Do not rebuild the database (default).', dest='rebuild_db', action='store_false')
 parser.set_defaults(rebuild_db=False)
 
-group.add_argument('--db-path', help='Path to the database of images (default: ~/.lighthouse/records).', default='~/.lighthouse/records')
-
+group.add_argument('--db-path', help='Path to the database of image features (default: ~/.lighthouse/records).',
+                   default='~/.lighthouse/records')
+group.add_argument('--db-store-images', help='Indicates whether we want to store raw images altogether with features.',
+                   action='store_true')
 
 #
 # Image acquisition from a video source.
@@ -106,10 +109,23 @@ parser.add_argument('--acquisition-dump-contours-prefix', help='Write contours t
 
 group = parser.add_argument_group(title="Finding objects in the database")
 
-group.add_argument('--find-detector', help='Feature detector to use (default: orb)', choices=['orb', 'akaze', 'surf'],
-                    default='orb')
-group.add_argument('--find-matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
-                    default='brute-force')
+group.add_argument('--matching-detector', help='Feature detector to use (default: orb)',
+                   choices=['orb', 'akaze', 'surf'], default='orb')
+group.add_argument('--matching-matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
+                   default='brute-force')
+group.add_argument('--matching-ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
+group.add_argument('--matching-n-frames', help='How many frames to capture for matching (default: 3)', default=3,
+                   type=int)
+group.add_argument('--matching-orb-n-features',
+                   help='Number of features to extract used in ORB detector (default: 2000)', default=1000, type=int)
+group.add_argument('--matching-akaze-n-channels', help='Number of channels used in AKAZE detector (default: 3)',
+                   choices=[1, 2, 3], default=3, type=int)
+group.add_argument('--matching-surf-threshold',
+                   help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)', default=1000,
+                   type=int)
+group.add_argument('--matching-score-threshold',
+                   help='Minimal matching score threshold below which we consider image as not matched (default: 5)',
+                   default=5, type=int)
 
 #
 # General.
@@ -119,28 +135,10 @@ group = parser.add_argument_group(title="General options")
 group.add_argument('--gui', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
 group.add_argument('--no-gui', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
 parser.set_defaults(show=True)
+group.add_argument('--cmd-ui', help='Use command line interface to manage the app', action='store_true')
 
 group.add_argument('--verbose', help='Increase output verbosity', dest='verbose', action='store_true')
 parser.set_defaults(verbose=False)
-
-#
-# FIXME: Not integrated yet.
-#
-
-group = parser.add_argument_group(title="More options (TODO: integrate these somewhere)")
-
-group.add_argument('--n-matches', help='Number of best matches to display  (default: 3)', default=3, type=int)
-group.add_argument('--ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
-group.add_argument('--n-frames', help='How many frames to capture for matching (default: 100)', default=100, type=int)
-group.add_argument('--orb-n-features', help='Number of features to extract used in ORB detector (default: 2000)',
-                    default=2000, type=int)
-group.add_argument('--akaze-n-channels', help='Number of channels used in AKAZE detector (default: 3)',
-                    choices=[1, 2, 3], default=3, type=int)
-group.add_argument('--surf-threshold',
-                    help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)',
-                    default=1000, type=int)
-group.add_argument('--cmd-ui', help='Use command line interface to manage the app', action='store_true')
-
 
 #
 # Ensure consistency.
@@ -152,38 +150,77 @@ elif args['acquisition_buffer_init'] >= 1:
     args['acquisition_buffer_init'] = .99
 print ("Args: %s" % args)
 
+# Python 2.7 uses raw_input while Python 3 deprecated it in favor of input.
+try:
+    input = raw_input
+except NameError:
+    pass
+
+
+def process_command(command, matcher):
+    if command == '1':
+        #
+        # We need at least one source image. We can grab it
+        #
+        # - from the webcam;
+        # - from a video file or remote stream (useful for testing);
+        # - from an image file (useful for testing).
+        #
+        images = None
+        if args['image_source']:
+            images = []
+            for source in args['image_source']:
+                images.append(cv2.imread(source))
+        else:
+            # Capture a video, either from the webcam or from a video file.
+            # This also handles stabilization.
+            images = capture.acquire(args)
+
+        # FIXME: Pass images to the matcher
+        return
+
+    # Let's match currently available frames against our database, choose the frame with best score and if it's larger
+    # than "--matching-score-threshold", play the corresponding voice label.
+    # Otherwise we should say that we can't recognize the picture and ask if user wants to enter into acquisition mode.
+    if command == '2':
+        match, frames = matcher.match()
+
+        if match is None or match['score'] < args['matching_score_threshold']:
+            print('Sorry I can not recognize this object :/ Let us add it to the database.')
+            # FIXME: Debug only, we won't do this automatically.
+            matcher.add_image_to_db((frames[0]['frame'], frames[0]['frame_description']),
+                                    input('Please enter object name > '))
+        else:
+            print('Object is recognized: %s - %s' % (match['db_image_description'].key, match['score']))
+            if args['show']:
+                matcher.draw_match(match, frames[match['frame_index']])
+        return
+
+    print('Unknown command.')
+
 
 def main():
+    # Expand user- and relative-paths.
+    args['db_path'] = os.path.abspath(os.path.expanduser(args['db_path']))
+
     capture.init(args)
-    matcher.init(args)
 
-    #
-    # We need at least one source image. We can grab it
-    #
-    # - from the webcam;
-    # - from a video file (useful for testing);
-    # - from an image file (useful for testing)
-    #
-    images = None
-    if args['image_source']:
-        images = []
-        for source in args['image_source']:
-            images.append(cv2.imread(source))
-    else:
-        # Capture a video, either from the webcam or from a video file.
-        # This also handles stabilization.
-        images = capture.acquire(args)
+    # FIXME: Matcher currently uses its own VideoStream to be able to perform matching while next frame is being
+    # retrieved in a separate thread. 'capture' module should somehow expose this capability.
+    matcher = Matcher(args)
+    matcher.preload_db()
 
-    if args['rebuild_db']:
-        matcher.rebuild_db(args)
+    # FIXME: Here we should say that app is ready.
 
-    if args['add_to_db']:
-        matcher.add_captures(images, args['add_to_db'], args)
+    cmd_ui = args['cmd_ui']
 
-    if args['match_with_db']:
-        results = matcher.find_closest_match(images, args)
-
-    # FIXME: Do something with the results.
+    while True:
+        # Here we should wait for the user action via button or console command.
+        if cmd_ui:
+            process_command(input('> '), matcher)
+        else:
+            print('GPIO support is not implemented yet!')
+            return -1
 
 if __name__ == '__main__':
     sys.exit(main())

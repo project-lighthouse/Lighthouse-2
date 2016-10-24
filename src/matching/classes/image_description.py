@@ -1,6 +1,6 @@
 class ImageDescription:
-    def __init__(self, descriptors, histogram, key=None, index=None):
+    def __init__(self, descriptors, histogram, key=None, sub_key=None):
         self.descriptors = descriptors
         self.histogram = histogram
         self.key = key
-        self.index = index
+        self.sub_key = sub_key

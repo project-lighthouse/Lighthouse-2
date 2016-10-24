@@ -2,6 +2,7 @@ import cv2
 import numpy
 import os
 import time
+import uuid
 from threading import Thread
 
 from classes.feature_extractor import FeatureExtractor
@@ -54,17 +55,18 @@ class Matcher:
     def __init__(self, options):
         self.options = options
         # Initialize the detector
-        detector_options = dict(orb_n_features=options['orb_n_features'], akaze_n_channels=options['akaze_n_channels'],
-                                surf_threshold=options['surf_threshold'])
+        detector_options = dict(orb_n_features=options['matching_orb_n_features'],
+                                akaze_n_channels=options['matching_akaze_n_channels'],
+                                surf_threshold=options['matching_surf_threshold'])
 
         self._options = options
         self._verbose = options['verbose']
-        self._detector, norm = get_detector(options['find_detector'], detector_options)
-        self._matcher = get_matcher(options['find_matcher'], norm)
-        self._feature_extractor = FeatureExtractor(options['verbose'])
+        self._detector, norm = get_detector(options['matching_detector'], detector_options)
+        self._matcher = get_matcher(options['matching_matcher'], norm)
+        self._feature_extractor = FeatureExtractor(self._verbose)
         self._db = None
 
-    def preload_db(self):
+    def preload_db(self, rebuild=False):
         """ Pre-loads the database from directory args['db_path'].
         preload_db() -> ()
         """
@@ -72,26 +74,28 @@ class Matcher:
 
     def match(self):
         """Finds the best match for the provided video frames in loaded database.
-            match() -> dict(score, db_image_description, frame, good_matches)"""
+            match() -> (dict(score, db_image_description, frame_index, good_matches), frames)"""
 
-        ratio_test_coefficient = self._options['ratio_test_k']
+        best_match = dict(score=0, db_image_description=None, frame_index=None, good_matches=None)
+        frames = []
+
+        ratio_test_coefficient = self._options['matching_ratio_test_k']
 
         stream_start = time.time()
 
-        vs = VideoStream(self._options['source']).start()
+        vs = VideoStream(self._options['video_source']).start()
 
         if not vs.is_opened():
             print('Error: unable to open video source')
-            return -1
+            return best_match
 
         if self._verbose:
             print('Video stream has been prepared in %s seconds.' % (time.time() - stream_start))
 
-        best_match = dict(score=0, db_image_description=None, frame=None, good_matches=None)
         match_all_start = time.time()
 
         # Capture "n_frames" frames, try to find match for every one and return match the best score.
-        for frame_index in range(0, self._options['n_frames']):
+        for frame_index in range(0, self._options['matching_n_frames']):
             ret, frame = vs.read()
 
             if not ret:
@@ -99,6 +103,9 @@ class Matcher:
                 break
 
             frame_description = self.get_image_description(frame)
+
+            # Remember all processed frames, to choose from in case we can't find a match.
+            frames.append({'frame': frame, 'frame_description': frame_description})
 
             # Iterate through entire database and try to find the best match based on the "score" value.
             match_frame_start = time.time()
@@ -128,7 +135,7 @@ class Matcher:
                 if score > best_match['score']:
                     best_match['score'] = score
                     best_match['db_image_description'] = db_image_description
-                    best_match['frame'] = frame
+                    best_match['frame_index'] = frame_index
                     best_match['good_matches'] = good_matches
 
             if self._verbose:
@@ -139,7 +146,9 @@ class Matcher:
 
         vs.stop()
 
-        return best_match
+        best_match = best_match if best_match['score'] > 0 else None
+
+        return best_match, frames
 
     def get_image_description(self, image):
         """Extracts image's feature keypoints and color histogram.
@@ -164,19 +173,16 @@ class Matcher:
 
         return ImageDescription(descriptors, histogram)
 
-    def add_image_to_db(self, image, key):
+    def add_image_to_db(self, (image, image_description), key):
         """Extracts image's feature keypoints and color histogram and saves it to the database under specified key.
            add_image_to_db(image, key) -> ()"""
 
         # First let's extract image features.
-        image_description = self.get_image_description(image)
-
-        # Then let's find other existing images for this key.
-        images_with_same_key = [x for x in self._db if x.key == key]
+        image_description = image_description if image_description is not None else self.get_image_description(image)
 
         # And fill in other required fields
         image_description.key = key
-        image_description.index = len(images_with_same_key)
+        image_description.sub_key = uuid.uuid4()
 
         self._db.append(image_description)
 
@@ -184,32 +190,26 @@ class Matcher:
         Thread(target=serialize_db,
                args=(self._db, self._feature_extractor, self._options['db_path'], self._verbose)).start()
 
-        # Save image itself if --data-source-map is provided.
-        data_source_map = self._options['data_source_map']
-        if data_source_map is not None:
-            key_path = '%s/%s' % (data_source_map, image_description.key)
+        # Save image itself if --db-store-images is provided.
+        if self._options['db_store_images']:
+            key_path = '%s/%s' % (self._options['db_path'], image_description.key)
             if not os.path.exists(key_path):
                 os.makedirs(key_path)
-            cv2.imwrite('%s/%s.jpg' % (key_path, image_description.index), image)
+            cv2.imwrite('%s/%s.jpg' % (key_path, image_description.sub_key), image)
 
-    def draw_match(self, match):
+    def draw_match(self, match, frame):
         """Draws lines between matched keypoints in the db image and random frame using provided "match" dictionary.
            draw_match(match) -> ()"""
-        data_source_map = self._options['data_source_map']
-        if data_source_map is None:
-            print('Required --data-source-map parameter is not provided, so match can not be drawn!')
-            return
-
-        db_image = cv2.imread('%s/%s/%s.jpg' % (data_source_map, match['db_image_description'].key,
-                                                match['db_image_description'].index))
+        db_image = cv2.imread('%s/%s/%s.jpg' % (self._options['db_path'], match['db_image_description'].key,
+                                                match['db_image_description'].sub_key))
         if db_image is None:
-            print('Can not find image for the db image description in --data-source-map folder!')
+            print('Can not find image for the db image description in --db-path folder!')
             return
 
         db_image_keypoints = self._detector.detect(cv2.cvtColor(db_image, cv2.COLOR_BGR2GRAY))
-        frame_image_keypoints = self._detector.detect(cv2.cvtColor(match['frame'], cv2.COLOR_BGR2GRAY))
+        frame_image_keypoints = self._detector.detect(cv2.cvtColor(frame['frame'], cv2.COLOR_BGR2GRAY))
 
-        result_image = cv2.drawMatchesKnn(db_image, db_image_keypoints, match['frame'], frame_image_keypoints,
+        result_image = cv2.drawMatchesKnn(db_image, db_image_keypoints, frame['frame'], frame_image_keypoints,
                                           match['good_matches'], None, flags=2)
         cv2.imshow('best-match', result_image)
         cv2.waitKey(0)
