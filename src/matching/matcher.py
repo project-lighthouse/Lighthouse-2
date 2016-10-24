@@ -1,4 +1,5 @@
 import cv2
+import errno
 import numpy
 import os
 import time
@@ -6,11 +7,20 @@ import uuid
 from threading import Thread
 
 from classes.feature_extractor import FeatureExtractor
-from classes.video_stream import VideoStream
 from classes.image_description import ImageDescription
 
 FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
+
+
+def make_dir(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
 
 def get_detector(detector_type, options):
@@ -52,7 +62,7 @@ def serialize_db(db, feature_extractor, file_name, verbose):
 
 
 class Matcher:
-    def __init__(self, options):
+    def __init__(self, capture, options):
         self.options = options
         # Initialize the detector
         detector_options = dict(orb_n_features=options['matching_orb_n_features'],
@@ -64,6 +74,7 @@ class Matcher:
         self._detector, norm = get_detector(options['matching_detector'], detector_options)
         self._matcher = get_matcher(options['matching_matcher'], norm)
         self._feature_extractor = FeatureExtractor(self._verbose)
+        self._capture = capture
         self._db = None
 
     def preload_db(self, rebuild=False):
@@ -83,9 +94,9 @@ class Matcher:
 
         stream_start = time.time()
 
-        vs = VideoStream(self._options['video_source']).start()
+        self._capture.resume()
 
-        if not vs.is_opened():
+        if not self._capture.is_started():
             print('Error: unable to open video source')
             return best_match
 
@@ -96,7 +107,7 @@ class Matcher:
 
         # Capture "n_frames" frames, try to find match for every one and return match the best score.
         for frame_index in range(0, self._options['matching_n_frames']):
-            ret, frame = vs.read()
+            ret, frame = self._capture.read()
 
             if not ret:
                 print('No frames is available.')
@@ -144,7 +155,7 @@ class Matcher:
         if self._verbose:
             print('All frames are processed in %s seconds.' % (time.time() - match_all_start))
 
-        vs.stop()
+        self._capture.pause()
 
         best_match = best_match if best_match['score'] > 0 else None
 
@@ -193,8 +204,7 @@ class Matcher:
         # Save image itself if --db-store-images is provided.
         if self._options['db_store_images']:
             key_path = '%s/%s' % (self._options['db_path'], image_description.key)
-            if not os.path.exists(key_path):
-                os.makedirs(key_path)
+            make_dir(key_path)
             cv2.imwrite('%s/%s.jpg' % (key_path, image_description.sub_key), image)
 
     def draw_match(self, match, frame):

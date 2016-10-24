@@ -4,6 +4,7 @@ import argparse
 import cv2
 import capture.capture as capture
 from matching.matcher import Matcher
+from matching.classes.video_stream import VideoStream
 import os
 import sys
 
@@ -56,8 +57,9 @@ group.add_argument('--video-acquisition-autostart', help='Start capturing immedi
 group.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You\'ll need a keyboard to start processing.', dest='autostart', action='store_false')
 parser.set_defaults(autostart=True)
 
-group.add_argument('--video-width', help='Video width for capture (default: 320).', default=320, type=int)
-group.add_argument('--video-height', help='Video height for capture (default: 200).', default=200, type=int)
+group.add_argument('--video-width', help='Video width for capture (default: 640).', default=640, type=int)
+group.add_argument('--video-height', help='Video height for capture (default: 480).', default=480, type=int)
+group.add_argument('--video-fps', help='Video frame rate in FPS. (default: 15).', default=15, type=int)
 
 #
 # Video stabilization.
@@ -186,15 +188,21 @@ def process_command(command, matcher):
         match, frames = matcher.match()
 
         if match is None or match['score'] < args['matching_score_threshold']:
-            print('Sorry I can not recognize this object :/ Let us add it to the database.')
+            score = 0 if match is None else match['score']
+            print('Sorry I can not recognize this object :/ (score is %s).' % score)
+
             # FIXME: Debug only, we won't do this automatically.
-            matcher.add_image_to_db((frames[0]['frame'], frames[0]['frame_description']),
-                                    input('Please enter object name > '))
+            if input('Add object to db (y/n)? > ') == 'y':
+                matcher.add_image_to_db((frames[0]['frame'], frames[0]['frame_description']),
+                                        input('Please enter object name > '))
         else:
             print('Object is recognized: %s - %s' % (match['db_image_description'].key, match['score']))
             if args['show']:
                 matcher.draw_match(match, frames[match['frame_index']])
-        return
+        return 0
+    # FIXME: Awful exit case handling...
+    if command == '3':
+        return -1
 
     print('Unknown command.')
 
@@ -207,7 +215,15 @@ def main():
 
     # FIXME: Matcher currently uses its own VideoStream to be able to perform matching while next frame is being
     # retrieved in a separate thread. 'capture' module should somehow expose this capability.
-    matcher = Matcher(args)
+
+    video_stream = VideoStream(args['video_source'], args['video_width'], args['video_height'], args['video_fps'])
+    matcher = Matcher(video_stream, args)
+
+    print('Preparing video stream...')
+    video_stream.start()
+    video_stream.pause()
+
+    print('Loading matching db...')
     matcher.preload_db()
 
     # FIXME: Here we should say that app is ready.
@@ -217,7 +233,10 @@ def main():
     while True:
         # Here we should wait for the user action via button or console command.
         if cmd_ui:
-            process_command(input('> '), matcher)
+            command_result = process_command(input('> '), matcher)
+            if command_result == -1:
+                video_stream.stop()
+                break
         else:
             print('GPIO support is not implemented yet!')
             return -1
