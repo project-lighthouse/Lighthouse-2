@@ -53,8 +53,7 @@ class VideoStream:
             if not self._started:
                 return
 
-            if not self._paused:
-                self._stream.grab()
+            self._stream.grab()
 
     def read(self):
         return self._stream.retrieve()

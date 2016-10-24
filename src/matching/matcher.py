@@ -143,6 +143,9 @@ class Matcher:
                              db_image_descriptors_count) * \
                             (good_matches_count / float(matches_count) * 100) + histogram_comparison_result
 
+                if self._verbose:
+                    print('Score for %s is %s.' % (db_image_description.key, score))
+
                 if score > best_match['score']:
                     best_match['score'] = score
                     best_match['db_image_description'] = db_image_description
