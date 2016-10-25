@@ -1,5 +1,5 @@
 import math
-import sys
+import time
 
 import cv2
 import numpy
@@ -20,6 +20,7 @@ def acquire(args):
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args['video_width'])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args['video_height'])
+    cap.set(cv2.CAP_PROP_FPS, args['video_fps'])
 
     backgroundSubstractor = cv2.createBackgroundSubtractorKNN()
 
@@ -249,7 +250,8 @@ def acquire(args):
             print("Writing mask to %s." % dest)
             cv2.imwrite(dest, best_original_mask)
 
-    cv2.destroyAllWindows()
+    if args['show']:
+        cv2.destroyAllWindows()
     return results
 
 
@@ -369,4 +371,27 @@ def stabilize(frames):
         # FIXME: Actually crop
 
     return cropped
+
+
+# FIXME: Temporary method that just captures frames without any processing.
+def capture(args):
+    cap = cv2.VideoCapture(args['video_source'])
+
+    if cap is None or not cap.isOpened():
+        print('Error: unable to open video source')
+        return -1
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args['video_width'])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args['video_height'])
+    cap.set(cv2.CAP_PROP_FPS, args['video_fps'])
+
+    frames = []
+    for frame_index in range(0, args['acquisition_keep_objects']):
+        frame_read_time = time.time()
+        ret, frame = cap.read()
+        frames.append(frame)
+        if args['verbose']:
+            print('Frame %s has been acquired in %s seconds.' % (frame_index, time.time() - frame_read_time))
+
+    return frames
 

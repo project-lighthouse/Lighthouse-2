@@ -4,9 +4,9 @@ import argparse
 import cv2
 import capture.capture as capture
 from matching.matcher import Matcher
-from matching.classes.video_stream import VideoStream
 import os
 import sys
+import time
 
 
 parser = argparse.ArgumentParser(description=
@@ -161,6 +161,9 @@ except NameError:
 
 def process_command(command, matcher):
     if command == '1':
+        if input('Do you want to add current frame to db (y/n)? > ') == 'n':
+            return
+
         #
         # We need at least one source image. We can grab it
         #
@@ -168,7 +171,6 @@ def process_command(command, matcher):
         # - from a video file or remote stream (useful for testing);
         # - from an image file (useful for testing).
         #
-        images = None
         if args['image_source']:
             images = []
             for source in args['image_source']:
@@ -176,29 +178,39 @@ def process_command(command, matcher):
         else:
             # Capture a video, either from the webcam or from a video file.
             # This also handles stabilization.
-            images = capture.acquire(args)
+            images = capture.capture(args) # capture.acquire(args)
 
-        # FIXME: Pass images to the matcher
+        matcher.add_image_to_db((images[0], None), input('Please enter object name > '))
+
         return
 
     # Let's match currently available frames against our database, choose the frame with best score and if it's larger
     # than "--matching-score-threshold", play the corresponding voice label.
     # Otherwise we should say that we can't recognize the picture and ask if user wants to enter into acquisition mode.
     if command == '2':
-        match, frames = matcher.match()
+        # First acquire images.
+        acquire_time = time.time()
+        images = capture.capture(args)
+        print('Images (%s) have been acquired in %s seconds.' % (len(images), time.time() - acquire_time))
+
+        # Go through matching process
+        match_start = time.time()
+        match, frames = matcher.match(images)
+        print('Matching has been done in %s seconds.' % (time.time() - match_start))
 
         if match is None or match['score'] < args['matching_score_threshold']:
-            score = 0 if match is None else match['score']
-            print('Sorry I can not recognize this object :/ (score is %s).' % score)
+            if match is None:
+                print('Sorry I can not recognize this object at all :/')
+            else:
+                print('Sorry I can not recognize this object :/ Closest match is "%s" with score "%s"' %
+                      (match['db_image_description'].key, match['score']))
 
-            # FIXME: Debug only, we won't do this automatically.
-            if input('Add object to db (y/n)? > ') == 'y':
-                matcher.add_image_to_db((frames[0]['frame'], frames[0]['frame_description']),
-                                        input('Please enter object name > '))
+            print('Type "1" to add current object to database.')
         else:
             print('Object is recognized: %s - %s' % (match['db_image_description'].key, match['score']))
             if args['show']:
                 matcher.draw_match(match, frames[match['frame_index']])
+
         return 0
     # FIXME: Awful exit case handling...
     if command == '3':
@@ -215,9 +227,7 @@ def main():
 
     # FIXME: Matcher currently uses its own VideoStream to be able to perform matching while next frame is being
     # retrieved in a separate thread. 'capture' module should somehow expose this capability.
-
-    video_stream = VideoStream(args['video_source'], args['video_width'], args['video_height'], args['video_fps'])
-    matcher = Matcher(video_stream, args)
+    matcher = Matcher(args)
 
     print('Loading matching db...')
     matcher.preload_db()

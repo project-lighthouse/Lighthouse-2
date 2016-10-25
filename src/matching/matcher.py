@@ -62,7 +62,7 @@ def serialize_db(db, feature_extractor, file_name, verbose):
 
 
 class Matcher:
-    def __init__(self, capture, options):
+    def __init__(self, options):
         self.options = options
         # Initialize the detector
         detector_options = dict(orb_n_features=options['matching_orb_n_features'],
@@ -74,7 +74,6 @@ class Matcher:
         self._detector, norm = get_detector(options['matching_detector'], detector_options)
         self._matcher = get_matcher(options['matching_matcher'], norm)
         self._feature_extractor = FeatureExtractor(self._verbose)
-        self._capture = capture
         self._db = None
 
     def preload_db(self, rebuild=False):
@@ -83,43 +82,20 @@ class Matcher:
         """
         self._db = self._feature_extractor.deserialize(self._options['db_path'])
 
-    def match(self):
+    def match(self, images):
         """Finds the best match for the provided video frames in loaded database.
             match() -> (dict(score, db_image_description, frame_index, good_matches), frames)"""
 
         best_match = dict(score=0, db_image_description=None, frame_index=None, good_matches=None)
+        ratio_test_coefficient = self._options['matching_ratio_test_k']
         frames = []
 
-        ratio_test_coefficient = self._options['matching_ratio_test_k']
-
-        stream_start = time.time()
-
-        self._capture.start()
-
-        if not self._capture.is_started():
-            print('Error: unable to open video source')
-            return best_match
-
-        if self._verbose:
-            print('Video stream has been prepared in %s seconds.' % (time.time() - stream_start))
-
-        match_all_start = time.time()
-
         # Capture "n_frames" frames, try to find match for every one and return match the best score.
-        for frame_index in range(0, self._options['matching_n_frames']):
-            frame_read_time = time.time()
-            ret, frame = self._capture.read()
-            if self._verbose:
-                print('Frame %s is retrieved in %s seconds.' % (frame_index, time.time() - frame_read_time))
-
-            if not ret:
-                print('No frames is available.')
-                break
-
-            frame_description = self.get_image_description(frame)
+        for image_index, image in enumerate(images):
+            frame_description = self.get_image_description(image)
 
             # Remember all processed frames, to choose from in case we can't find a match.
-            frames.append({'frame': frame, 'frame_description': frame_description})
+            frames.append({'frame': image, 'frame_description': frame_description})
 
             # Iterate through entire database and try to find the best match based on the "score" value.
             match_frame_start = time.time()
@@ -152,16 +128,11 @@ class Matcher:
                 if score > best_match['score']:
                     best_match['score'] = score
                     best_match['db_image_description'] = db_image_description
-                    best_match['frame_index'] = frame_index
+                    best_match['frame_index'] = image_index
                     best_match['good_matches'] = good_matches
 
             if self._verbose:
-                print('Frame %s is processed in %s seconds.' % (frame_index, time.time() - match_frame_start))
-
-        if self._verbose:
-            print('All frames are processed in %s seconds.' % (time.time() - match_all_start))
-
-        self._capture.stop()
+                print('Frame %s is processed in %s seconds.' % (image_index, time.time() - match_frame_start))
 
         best_match = best_match if best_match['score'] > 0 else None
 
