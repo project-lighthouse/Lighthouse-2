@@ -219,10 +219,6 @@ def main():
     video_stream = VideoStream(args['video_source'], args['video_width'], args['video_height'], args['video_fps'])
     matcher = Matcher(video_stream, args)
 
-    print('Preparing video stream...')
-    video_stream.start()
-    video_stream.pause()
-
     print('Loading matching db...')
     matcher.preload_db()
 
@@ -235,7 +231,6 @@ def main():
         if cmd_ui:
             command_result = process_command(input('> '), matcher)
             if command_result == -1:
-                video_stream.stop()
                 break
         else:
             print('GPIO support is not implemented yet!')

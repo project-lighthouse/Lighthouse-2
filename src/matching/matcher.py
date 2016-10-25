@@ -94,7 +94,7 @@ class Matcher:
 
         stream_start = time.time()
 
-        self._capture.resume()
+        self._capture.start()
 
         if not self._capture.is_started():
             print('Error: unable to open video source')
@@ -107,7 +107,10 @@ class Matcher:
 
         # Capture "n_frames" frames, try to find match for every one and return match the best score.
         for frame_index in range(0, self._options['matching_n_frames']):
+            frame_read_time = time.time()
             ret, frame = self._capture.read()
+            if self._verbose:
+                print('Frame %s is retrieved in %s seconds.' % (frame_index, time.time() - frame_read_time))
 
             if not ret:
                 print('No frames is available.')
@@ -158,7 +161,7 @@ class Matcher:
         if self._verbose:
             print('All frames are processed in %s seconds.' % (time.time() - match_all_start))
 
-        self._capture.pause()
+        self._capture.stop()
 
         best_match = best_match if best_match['score'] > 0 else None
 
