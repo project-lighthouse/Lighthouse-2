@@ -128,6 +128,10 @@ group.add_argument('--matching-surf-threshold',
 group.add_argument('--matching-score-threshold',
                    help='Minimal matching score threshold below which we consider image as not matched (default: 5)',
                    default=5, type=int)
+group.add_argument('--matching-keypoints-threshold',
+                   help='Minimal number of keypoints that should be extracted from the target image to be considered as'
+                        'good enough sample. (default: 50)',
+                   default=50, type=int)
 
 #
 # General.
@@ -178,9 +182,15 @@ def process_command(command, matcher):
         else:
             # Capture a video, either from the webcam or from a video file.
             # This also handles stabilization.
-            images = capture.capture(args) # capture.acquire(args)
+            acquire_time = time.time()
+            images = capture.capture(args)  # capture.acquire(args)
+            print('Images (%s) have been acquired in %s seconds.' % (len(images), time.time() - acquire_time))
 
-        matcher.add_image_to_db((images[0], None), input('Please enter object name > '))
+        if matcher.add_image_to_db(images[0], input('Please enter object name > ')):
+            print('Image successfully added to the database!')
+        else:
+            print('\033[91mSorry, we could not add image to the database (not enough light, blurry etc.). '
+                  'Please, try again...\033[0m')
 
         return
 
@@ -198,14 +208,20 @@ def process_command(command, matcher):
         match, frames = matcher.match(images)
         print('Matching has been done in %s seconds.' % (time.time() - match_start))
 
+        # Not having any processed frames means that we couldn't find any good image sample, let's notify user.
+        if len(frames) == 0:
+            print('\033[91mSorry, we could not add image to the database (not enough light, blurry etc.). '
+                  'Please, try again...\033[0m')
+            return
+
         if match is None or match['score'] < args['matching_score_threshold']:
             if match is None:
-                print('Sorry I can not recognize this object at all :/')
+                print('\033[91mSorry I can not recognize this object at all :/\033[0m')
             else:
-                print('Sorry I can not recognize this object :/ Closest match is "%s" with score "%s"' %
+                print('\033[91mSorry I can not recognize this object :/ Closest match is "%s" with score "%s".\033[0m' %
                       (match['db_image_description'].key, match['score']))
 
-            print('Type "1" to add current object to database.')
+            print('\033[92mType "1" to add current object to database.\033[0m')
         else:
             print('Object is recognized: %s - %s' % (match['db_image_description'].key, match['score']))
             if args['show']:

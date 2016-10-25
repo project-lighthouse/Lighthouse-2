@@ -4,7 +4,6 @@ import numpy
 import os
 import time
 import uuid
-from threading import Thread
 
 from classes.feature_extractor import FeatureExtractor
 from classes.image_description import ImageDescription
@@ -54,13 +53,6 @@ def get_matcher(matcher_type, norm):
     return matcher
 
 
-def serialize_db(db, feature_extractor, file_name, verbose):
-    serialize_start = time.time()
-    feature_extractor.serialize(db, file_name)
-    if verbose:
-        print('Database has been serialized in %s seconds.' % (time.time() - serialize_start))
-
-
 class Matcher:
     def __init__(self, options):
         self.options = options
@@ -76,7 +68,7 @@ class Matcher:
         self._feature_extractor = FeatureExtractor(self._verbose)
         self._db = None
 
-    def preload_db(self, rebuild=False):
+    def preload_db(self):
         """ Pre-loads the database from directory args['db_path'].
         preload_db() -> ()
         """
@@ -93,6 +85,10 @@ class Matcher:
         # Capture "n_frames" frames, try to find match for every one and return match the best score.
         for image_index, image in enumerate(images):
             frame_description = self.get_image_description(image)
+
+            # If we couldn't get frame description (aka keypoints), let's skip this frame.
+            if frame_description is None:
+                continue
 
             # Remember all processed frames, to choose from in case we can't find a match.
             frames.append({'frame': image, 'frame_description': frame_description})
@@ -156,17 +152,29 @@ class Matcher:
         # Extract all possible keypoints from the frame.
         (keypoints, descriptors) = self._detector.detectAndCompute(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), None)
 
+        keypoints = keypoints if keypoints is not None else []
+        descriptors = descriptors if descriptors is not None else []
+
         if self._verbose:
-            print('Image keypoints extracted in %s seconds.' % (time.time() - detector_time))
+            print('Image keypoints (%s) and descriptors (%s) extracted in %s seconds.' %
+                  (len(keypoints), len(descriptors), time.time() - detector_time))
+
+        # If can't extract enough keypoints, that means something wrong with the frame (too dark, blurry etc.).
+        if len(keypoints) < self._options['matching_keypoints_threshold']:
+            return None
 
         return ImageDescription(descriptors, histogram)
 
-    def add_image_to_db(self, (image, image_description), key):
-        """Extracts image's feature keypoints and color histogram and saves it to the database under specified key.
-           add_image_to_db(image, key) -> ()"""
+    def add_image_to_db(self, image, key):
+        """Extracts image's feature keypoints and color histogram and saves it to the database under specified key. If
+        we can't extract enough keypoints from the image, we return `False` to notify user about the issue.
+           add_image_to_db(image, key) -> boolean"""
 
         # First let's extract image features.
-        image_description = image_description if image_description is not None else self.get_image_description(image)
+        image_description = self.get_image_description(image)
+
+        if image_description is None:
+            return False
 
         # And fill in other required fields
         image_description.key = key
@@ -174,15 +182,19 @@ class Matcher:
 
         self._db.append(image_description)
 
-        # Serialize data to the disk.
-        Thread(target=serialize_db,
-               args=(self._db, self._feature_extractor, self._options['db_path'], self._verbose)).start()
+        # Serialize features for new image.
+        serialize_start = time.time()
+        self._feature_extractor.serialize([image_description], self._options['db_path'])
+        if self._verbose:
+            print('Entry has been serialized in %s seconds.' % (time.time() - serialize_start))
 
         # Save image itself if --db-store-images is provided.
         if self._options['db_store_images']:
             key_path = '%s/%s' % (self._options['db_path'], image_description.key)
             make_dir(key_path)
             cv2.imwrite('%s/%s.jpg' % (key_path, image_description.sub_key), image)
+
+        return True
 
     def draw_match(self, match, frame):
         """Draws lines between matched keypoints in the db image and random frame using provided "match" dictionary.

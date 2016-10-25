@@ -1,5 +1,3 @@
-import cv2
-import datetime
 import errno
 import glob
 import json
@@ -24,58 +22,12 @@ class FeatureExtractor:
     def __init__(self, verbose):
         self._verbose = verbose
 
-    def extract(self, image_set_path, detector_type, options):
-        if detector_type == 'orb':
-            # Initialize the ORB descriptor, then detect keypoints and extract local invariant descriptors from the
-            # image.
-            detector = cv2.ORB_create(nfeatures=options['orb_n_features'])
-        elif detector_type == 'akaze':
-            detector = cv2.AKAZE_create(descriptor_channels=options['akaze_n_channels'])
-        else:
-            detector = cv2.xfeatures2d.SURF_create(hessianThreshold=options['surf_threshold'])
-
-        image_descriptions = []
-
-        # loop over the images to find the template in
-        for image_set_path in glob.glob(image_set_path + "/**/*.jpg"):
-            # File name is an sub_key, file folder is the key.
-            key, sub_key = os.path.splitext(image_set_path)[0].split('/')[-2:]
-
-            # Load the image, convert it to grayscale.
-            image = cv2.imread(image_set_path)
-            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-            if self._verbose:
-                print('{} image loaded: {:%H:%M:%S.%f}'.format(image_set_path, datetime.datetime.now()))
-
-            (image_keypoints, image_descriptors) = detector.detectAndCompute(gray_image, None)
-
-            if self._verbose:
-                print('{} image\'s features are extracted: {:%H:%M:%S.%f}'.format(image_set_path,
-                                                                                  datetime.datetime.now()))
-
-            image_histogram = cv2.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-            image_histogram = cv2.normalize(image_histogram, image_histogram).flatten()
-
-            if self._verbose:
-                print('{} image\'s histogram calculated: {:%H:%M:%S.%f}'.format(image_set_path,
-                                                                                datetime.datetime.now()))
-
-            image_descriptions.append(ImageDescription(image_descriptors, image_histogram, key, sub_key))
-
-        if self._verbose:
-            print('All images processed ({} images): {:%H:%M:%S.%f}'.format(len(image_descriptions),
-                                                                            datetime.datetime.now()))
-
-        return image_descriptions
-
     def serialize(self, image_descriptions, output_path):
         serialize_time = time.time()
 
         for image_description in image_descriptions:
             if self._verbose:
-                print('Serializing descriptions for {} : {:%H:%M:%S.%f}'.format(image_description.key,
-                                                                                datetime.datetime.now()))
+                print('Serializing %s descriptors for %s' % (len(image_description.descriptors), image_description.key))
             serialized_image_description = {'histogram': dict(dtype=str(image_description.histogram.dtype),
                                                               content=image_description.histogram.tolist()),
                                             'descriptors': dict(dtype=str(image_description.descriptors.dtype),
