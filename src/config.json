@@ -2,5 +2,8 @@
   "video_source": 0,
   "video_width": 640,
   "video_height": 480,
-  "video_fps": 15
+  "video_fps": 15,
+  "audio_out_device": "plughw:1",
+  "audio_in_device": "plughw:1",
+  "db_root_dir": "~/Data"
 }
