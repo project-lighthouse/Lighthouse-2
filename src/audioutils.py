@@ -3,11 +3,17 @@ import time
 from array import array
 import alsaaudio
 
+ALSA_SPEAKER = "plug:default"     # ALSA device identifier
+ALSA_MICROPHONE = "plug:default"  # ALSA device identifier
 BYTES_PER_SAMPLE = 2
 FORMAT = alsaaudio.PCM_FORMAT_S16_LE  # We use signed 16-bit samples
 SAMPLES_PER_SECOND = 16000            # at 16000 samples per second
 
-# Adjust this value as needed depending on mic sensitivity
+# Adjust this value as needed depending on mic sensitivity.
+# For a high-quality USB mic, 150 is a good value.
+# For a cheap USB headset, 3000 is better.
+# We need to get this value right in order to have recordings
+# automatically stop on silence.
 DEFAULT_SILENCE_THRESHOLD = 150
 
 # Generate a sine wave of the specified frequency and duration with
@@ -27,16 +33,13 @@ def makebeep(frequency, duration):
 
     return samples
 
-start_recording_tone = makebeep(800, .2)
-stop_recording_tone = makebeep(400, .2)
-
 # Play the specified audio samples though the speakers.
 # This function expects and array or bytes object like those returned
 # by the makebeep() and record() functions.
 def play(samples):
     if (len(samples) == 0):
         return
-    speaker = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK)
+    speaker = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK, card=ALSA_SPEAKER)
     speaker.setchannels(1)
     speaker.setrate(SAMPLES_PER_SECOND)
     speaker.setformat(FORMAT)
@@ -46,12 +49,13 @@ def play(samples):
     end = time.time()
 
     # the write() call above only blocks until all the
-    # samples are buffered by the kernel, so it returns
+    # samples are buffered by the kernel, so it may return
     # before the sound has finished playing.
     # We want our function to block until the sound is done
     duration = float(len(samples))/(BYTES_PER_SAMPLE * SAMPLES_PER_SECOND)
     elapsed = end - start
-    time.sleep(duration - elapsed)
+    if duration - elapsed > 0:
+        time.sleep(duration - elapsed)
 
 def playfile(filename):
     with open(filename, 'rb') as f:
@@ -80,7 +84,7 @@ def record(min_duration=1,         # Record at least this many seconds
     # initial value chosen so that the silence threshold does not decrease
     max_amplitude = int(silence_threshold / silence_factor)
 
-    mic = alsaaudio.PCM(alsaaudio.PCM_CAPTURE)
+    mic = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, card=ALSA_MICROPHONE)
     mic.setchannels(1)
     mic.setrate(SAMPLES_PER_SECOND)
     mic.setformat(FORMAT)
@@ -125,13 +129,34 @@ def record(min_duration=1,         # Record at least this many seconds
 
 if __name__ == '__main__':
 
-    play(start_recording_tone)
-    time.sleep(0.1)  # to ensure we don't pick up any of the tone in the mic
-    recording = record()
-    play(stop_recording_tone)
+    from eventloop import EventLoop
 
-    with open('/tmp/recording.raw', 'wb') as f:
-        recording.tofile(f)
+    print('longpress to record');
+    print('click to play back recording');
+    print('doubleclick to quit');
+    eventloop = EventLoop()
 
-    time.sleep(.5)
-    playfile('/tmp/recording.raw')
+    recording = None
+    start_recording_tone = makebeep(800, .2)
+    stop_recording_tone = makebeep(400, .2)
+
+    def button_handler(event, pin):
+        global recording
+        if pin != 26:
+            return
+        if event == 'click':
+            if recording:
+                play(recording)
+            else:
+                print("long press to make a recording")
+        elif event == 'longpress':
+            play(start_recording_tone)
+            time.sleep(0.1)  # don't pick up any of the tone in the mic
+            recording = record()
+            play(stop_recording_tone)
+        elif event == 'doubleclick':
+            eventloop.exit()
+
+
+    eventloop.monitor_gpio_button(26, button_handler);
+    eventloop.loop()
