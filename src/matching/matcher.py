@@ -20,7 +20,7 @@ class Matcher:
         self._logger = logging.getLogger(__name__)
         self._detector, norm = self._get_detector()
         self._matcher = self._get_matcher(norm)
-        self._storage_manager = StorageManager(options['db_path'])
+        self._storage_manager = StorageManager(options.db_path)
         self._stored_descriptions = None
 
     def preload_db(self):
@@ -40,7 +40,7 @@ class Matcher:
         """
 
         best_match = dict(score=0, description=None, image_index=None, good_matches=None)
-        ratio_test_coefficient = self._options['matching_ratio_test_k']
+        ratio_test_coefficient = self._options.matching_ratio_test_k
         image_descriptions = []
 
         # Iterate through provided images to find the match for every one and return match with the best score.
@@ -116,7 +116,7 @@ class Matcher:
         self._stored_descriptions.append(description)
 
         # Persist new entry to the storage.
-        self._storage_manager.save_entry(description, image if self._options['db_store_images'] else None)
+        self._storage_manager.save_entry(description, image if self._options.db_store_images else None)
 
         return True
 
@@ -152,7 +152,7 @@ class Matcher:
 
         # If we can't extract enough keypoints, that means that something is wrong with the image: either it's too dark
         # or blurry.
-        if len(keypoints) < self._options['matching_keypoints_threshold']:
+        if len(keypoints) < self._options.matching_keypoints_threshold:
             return None
 
         return ImageDescription(descriptors, histogram)
@@ -185,16 +185,16 @@ class Matcher:
             Instance of either ORB detector or AKAZE detector or SURF detector.
         """
 
-        detector_type = self._options['matching_detector']
+        detector_type = self._options.matching_detector
 
         if detector_type == 'orb':
-            detector = cv2.ORB_create(nfeatures=self._options['matching_orb_n_features'])
+            detector = cv2.ORB_create(nfeatures=self._options.matching_orb_n_features)
             norm = cv2.NORM_HAMMING
         elif detector_type == 'akaze':
-            detector = cv2.AKAZE_create(descriptor_channels=self._options['matching_akaze_n_channels'])
+            detector = cv2.AKAZE_create(descriptor_channels=self._options.matching_akaze_n_channels)
             norm = cv2.NORM_HAMMING
         else:
-            detector = cv2.xfeatures2d.SURF_create(hessianThreshold=self._options['matching_surf_threshold'])
+            detector = cv2.xfeatures2d.SURF_create(hessianThreshold=self._options.matching_surf_threshold)
             norm = cv2.NORM_L2
 
         return detector, norm
@@ -208,7 +208,7 @@ class Matcher:
         Returns:
             Instance of either BF Matcher or FLANN Based matcher.
         """
-        matcher_type = self._options['matching_matcher']
+        matcher_type = self._options.matching_matcher
 
         if matcher_type == 'brute-force':
             # Create Brute Force matcher.

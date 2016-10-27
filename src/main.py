@@ -2,19 +2,19 @@
 
 import cv2
 import config
-from capture import capture
+import capture
 import logging
 from matching.matcher import Matcher
 import os
 import sys
 import time
 
-args = config.getConfig()
+options = config.getConfig()
 
-logging.basicConfig(level=logging.DEBUG if args['verbose'] else logging.INFO)
+logging.basicConfig(level=logging.DEBUG if options.verbose else logging.INFO)
 logger = logging.getLogger(__name__)
 
-logger.debug("Args: %s" % args)
+logger.debug("Options: %s" % options)
 
 # Python 2.7 uses raw_input while Python 3 deprecated it in favor of input.
 try:
@@ -35,14 +35,14 @@ def process_command(command, matcher):
         # - from a video file or remote stream (useful for testing);
         # - from an image file (useful for testing).
         #
-        if args['image_source']:
+        if options.image_source:
             images = []
-            for source in args['image_source']:
+            for source in options.image_source:
                 images.append(cv2.imread(source))
         else:
             # Capture a video, either from the webcam or from a video file. This also handles stabilization.
             acquire_time = time.time()
-            images = capture.capture(args)  # capture.acquire(args)
+            images = capture.capture(options)  # capture.acquire(options)
 
             logger.debug('Images (%s) have been acquired in %s seconds.' % (len(images), time.time() - acquire_time))
 
@@ -60,7 +60,7 @@ def process_command(command, matcher):
     if command == '2':
         # First acquire images.
         acquire_time = time.time()
-        images = capture.capture(args)
+        images = capture.capture(options)
 
         logger.debug('Images (%s) have been acquired in %s seconds.' % (len(images), time.time() - acquire_time))
 
@@ -77,7 +77,7 @@ def process_command(command, matcher):
                   'Please, try again...\033[0m')
             return
 
-        if match is None or match['score'] < args['matching_score_threshold']:
+        if match is None or match['score'] < options.matching_score_threshold:
             if match is None:
                 print('\033[91mSorry I can not recognize this object at all :/\033[0m')
             else:
@@ -87,7 +87,7 @@ def process_command(command, matcher):
             print('\033[92mType "1" to add current object to database.\033[0m')
         else:
             print('Object is recognized: %s - %s' % (match['description'].key, match['score']))
-            if args['show']:
+            if options.show:
                 matcher.draw_match(match, images[match['image_index']])
 
         return 0
@@ -101,16 +101,14 @@ def process_command(command, matcher):
 
 def main():
     # Expand user- and relative-paths.
-    args['db_path'] = os.path.abspath(os.path.expanduser(args['db_path']))
+    options.db_path = os.path.abspath(os.path.expanduser(options.db_path))
 
-    capture.init(args)
-
-    matcher = Matcher(args)
+    matcher = Matcher(options)
 
     logger.debug('Loading matching db...')
     matcher.preload_db()
 
-    cmd_ui = args['cmd_ui']
+    cmd_ui = options.cmd_ui
 
     while True:
         # Here we should wait for the user action via button or console command.

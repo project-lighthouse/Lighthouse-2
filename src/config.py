@@ -135,7 +135,7 @@ def getConfig():
     group.add_argument('--verbose', help='Increase output verbosity', dest='verbose', action='store_true')
     parser.set_defaults(verbose=False)
 
-    args = vars(parser.parse_args())
+    args = parser.parse_args()
 
     #
     # Ensure consistency.

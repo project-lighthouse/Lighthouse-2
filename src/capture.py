@@ -14,7 +14,7 @@ def capture(args):
     cap.set(cv2.CAP_PROP_FPS, args['video_fps'])
 
     frames = []
-    for frame_index in range(0, args['acquisition_keep_objects']):
+    for frame_index in range(0, 1): #args['acquisition_keep_objects']):
         frame_read_time = time.time()
         ret, frame = cap.read()
         frames.append(frame)
