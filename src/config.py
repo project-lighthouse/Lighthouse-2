@@ -131,7 +131,7 @@ def getConfig():
     # group.add_argument('--gui', help='Display videos, expect keyboard interaction (default).', dest='show', action='store_true')
     # group.add_argument('--no-gui', help='Do not display videos, don''t expect keyboard interaction.', dest='show', action='store_false')
     # parser.set_defaults(show=True)
-    # group.add_argument('--cmd-ui', help='Use command line interface to manage the app', action='store_true')
+    group.add_argument('--cmd-ui', help='Use command line interface to manage the app', action='store_true')
 
     group.add_argument('--verbose', help='Increase output verbosity', dest='verbose', action='store_true')
     parser.set_defaults(verbose=False)
