@@ -2,7 +2,7 @@
 
 import argparse
 import cv2
-import capture.capture as capture
+from capture import capture
 import logging
 from matching.matcher import Matcher
 import os
