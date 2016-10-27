@@ -81,6 +81,6 @@ def button_handler(event, pin):
         record_new_item()
 
 eventloop = EventLoop()
-eventloop.monitor_gpio_button(26, button_handler);
+eventloop.monitor_gpio_button(config['gpio_pin'], button_handler);
 eventloop.loop()
 

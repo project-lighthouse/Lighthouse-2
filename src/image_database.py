@@ -39,4 +39,6 @@ class ImageDatabase:
             if (score < bestScore):
                 bestScore = score
                 bestMatch = item
+        # This is too simple. We should return an array with zero or more
+        # matches and will probably need a configurable threshold
         return bestMatch

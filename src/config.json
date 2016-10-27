@@ -5,5 +5,6 @@
   "video_fps": 15,
   "audio_out_device": "plughw:1",
   "audio_in_device": "plughw:1",
-  "db_root_dir": "~/Data"
+  "db_root_dir": "~/Data",
+  "gpio_pin": 26
 }
