@@ -100,9 +100,6 @@ def process_command(command, matcher):
 
 
 def main():
-    # Expand user- and relative-paths.
-    options.db_path = os.path.abspath(os.path.expanduser(options.db_path))
-
     matcher = Matcher(options)
 
     logger.debug('Loading matching db...')

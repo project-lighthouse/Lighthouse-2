@@ -1,4 +1,5 @@
 import argparse
+import os
 
 # XXX Commented out arguments are for experimental code that is
 # not currently in use
@@ -144,5 +145,9 @@ def getConfig():
     #     args.acquisition_buffer_init = .01
     # elif args.acquisition_buffer_init >= 1:
     #     args.acquisition_buffer_init = .99
+
+
+    # Expand user- and relative-paths.
+    args.db_path = os.path.abspath(os.path.expanduser(args.db_path))
 
     return args
