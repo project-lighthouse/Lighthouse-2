@@ -140,9 +140,9 @@ def getConfig():
     #
     # Ensure consistency.
     #
-    # if args['acquisition_buffer_init'] <= 0:
-    #     args['acquisition_buffer_init'] = .01
-    # elif args['acquisition_buffer_init'] >= 1:
-    #     args['acquisition_buffer_init'] = .99
+    # if args.acquisition_buffer_init <= 0:
+    #     args.acquisition_buffer_init = .01
+    # elif args.acquisition_buffer_init >= 1:
+    #     args.acquisition_buffer_init = .99
 
     return args
