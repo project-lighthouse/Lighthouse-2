@@ -4,7 +4,7 @@ import time
 import cv2
 import logging
 import config
-import capture
+from camera import Camera
 from eventloop import EventLoop
 import audioutils
 from image_database import ImageDatabase
@@ -31,9 +31,14 @@ with open('sounds/shutter.raw', 'rb') as f:
 
 db = ImageDatabase(options)
 
+camera = Camera(options.video_source,
+                options.video_width,
+                options.video_height,
+                options.video_fps)
+
 def take_picture():
     audioutils.playAsync(shutter)
-    return capture.capture(options)
+    return camera.capture()
 
 def match_item():
     matched_items = {}
@@ -65,7 +70,9 @@ def record_new_item():
     print("added image in {}".format(item.dirname))
 
 def button_handler(event, pin):
-    if event == 'click':
+    if event == 'press':
+        camera.start()
+    elif event == 'click':
         match_item()
     elif event == 'longpress':
         record_new_item()
