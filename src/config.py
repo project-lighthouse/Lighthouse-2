@@ -25,8 +25,9 @@ def getConfig():
     # group.add_argument('--no-rebuild-db', help='Do not rebuild the database (default).', dest='rebuild_db', action='store_false')
     # parser.set_defaults(rebuild_db=False)
 
-    group.add_argument('--db-path', help='Path to the database of image features (default: ~/.lighthouse/records).',
-                       default='~/.lighthouse/records')
+    group.add_argument('--db-path', 
+                       help='Path to the database of image features (default: ~/Data).',
+                       default='~/Data')
     group.add_argument('--db-store-images', help='Indicates whether we want to store raw images altogether with features.',
                        action='store_true')
 
@@ -106,10 +107,11 @@ def getConfig():
     group.add_argument('--matching-matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
                        default='brute-force')
     group.add_argument('--matching-ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
+    group.add_argument('--matching-histogram-weight', help='How much weight to give to histogram correlation when matching images', default=5.0, type=float)
     group.add_argument('--matching-n-frames', help='How many frames to capture for matching (default: 3)', default=3,
                        type=int)
     group.add_argument('--matching-orb-n-features',
-                       help='Number of features to extract used in ORB detector (default: 2000)', default=1000, type=int)
+                       help='Number of features to extract used in ORB detector (default: 500)', default=500, type=int)
     group.add_argument('--matching-akaze-n-channels', help='Number of channels used in AKAZE detector (default: 3)',
                        choices=[1, 2, 3], default=3, type=int)
     group.add_argument('--matching-surf-threshold',
@@ -117,7 +119,10 @@ def getConfig():
                        type=int)
     group.add_argument('--matching-score-threshold',
                        help='Minimal matching score threshold below which we consider image as not matched (default: 5)',
-                       default=5, type=int)
+                       default=5.0, type=float)
+    group.add_argument('--matching-score-ratio',
+                       help='Secondary matches must have a score at least this fraction of the best match (default: 0.5)',
+                       default=0.5, type=float)
     group.add_argument('--matching-keypoints-threshold',
                        help='Minimal number of keypoints that should be extracted from the target image to be considered as'
                        'good enough sample. (default: 50)',
@@ -135,6 +140,16 @@ def getConfig():
 
     group.add_argument('--verbose', help='Increase output verbosity', dest='verbose', action='store_true')
     parser.set_defaults(verbose=False)
+
+    group.add_argument('--gpio-pin',
+                       help='What GPIO pin the button is attached to',
+                       default=26, type=int)
+    group.add_argument('--audio-out-device',
+                       help='The ALSA device name for the speaker',
+                       default='plughw:1')
+    group.add_argument('--audio-in-device',
+                       help='The ALSA device name for the microphone',
+                       default='plughw:1')
 
     args = parser.parse_args()
 
