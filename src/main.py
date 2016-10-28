@@ -64,10 +64,16 @@ def match_item():
 
 def record_new_item():
     image = take_picture()
-    audioutils.playfile('sounds/afterthetone.raw')
-    audioutils.play(start_recording_tone)
-    audio = audioutils.record()
-    audioutils.play(stop_recording_tone)
+    audio = None
+    while audio == None:
+        audioutils.playfile('sounds/afterthetone.raw')
+        audioutils.play(start_recording_tone)
+        audio = audioutils.record()
+        audioutils.play(stop_recording_tone)
+        if len(audio) < 800:  # if we got less than 50ms of sound
+            audio = None
+            audioutils.playfile('sounds/nosound.raw')
+
     item = db.add(image, audio)
     print("added image in {}".format(item.dirname))
     audioutils.playfile('sounds/registered.raw')
