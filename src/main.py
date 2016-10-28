@@ -9,6 +9,7 @@ from camera import Camera
 from eventloop import EventLoop
 import audioutils
 from image_database import ImageDatabase
+from image_description import ImageDescription, TooFewFeaturesException
 
 options = config.getConfig()
 
@@ -42,28 +43,39 @@ def take_picture():
     return camera.capture()
 
 def match_item():
-    matched_items = {}
+    try:
+        matched_items = {}
 
-    # We'll take up to this many pictures in order to find match
-    for n in range(0, options.matching_n_frames):
-        image = take_picture()
-        matches = db.match(image)
-        if len(matches) > 0:
-            break;
+        # We'll take up to this many pictures in order to find match
+        for n in range(0, options.matching_n_frames):
+            image = take_picture()
+            matches = db.match(image)
+            if len(matches) > 0:
+                break;
 
-    if len(matches) == 0:
-        audioutils.playfile('sounds/noitem.raw')
-    elif len(matches) == 1:
-        (score,item) = matches[0]
-        audioutils.playfile(item.audio_filename())
-    else:
-        audioutils.playfile('sounds/multipleitems.raw')
-        for (score,match) in matches:
-            audioutils.playfile(match.audio_filename())
-            time.sleep(0.2)
+        if len(matches) == 0:
+            audioutils.playfile('sounds/noitem.raw')
+        elif len(matches) == 1:
+            (score,item) = matches[0]
+            audioutils.playfile(item.audio_filename())
+        else:
+            audioutils.playfile('sounds/multipleitems.raw')
+            for (score,match) in matches:
+                audioutils.playfile(match.audio_filename())
+                time.sleep(0.2)
+    except TooFewFeaturesException:
+        print('Too few features')
+        audioutils.playfile('sounds/nothing_recognized.raw')
 
 def record_new_item():
     image = take_picture()
+    try:
+        description = ImageDescription.fromImage(image)
+    except TooFewFeaturesException:
+        print('Too few features')
+        audioutils.playfile('sounds/nothing_recognized.raw')
+        return
+    
     audio = None
     while audio == None:
         audioutils.playfile('sounds/afterthetone.raw')
@@ -74,7 +86,7 @@ def record_new_item():
             audio = None
             audioutils.playfile('sounds/nosound.raw')
 
-    item = db.add(image, audio)
+    item = db.add(image, audio, description)
     print("added image in {}".format(item.dirname))
     audioutils.playfile('sounds/registered.raw')
     audioutils.play(audio)

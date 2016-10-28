@@ -28,17 +28,18 @@ class ImageDatabase:
     # Given an image and an audio label for it, this method does feature
     # detection on the image, creates a new ImageDescription object,
     # persists the item to disk and returns the ImageDescription object
-    def add(self, imagedata, audiodata):
-        item = ImageDescription.fromImage(imagedata)
+    def add(self, imagedata, audiodata, description=None):
+        if description == None:
+            description = ImageDescription.fromImage(imagedata)
 
         # We'll never add more than one image per second, so use a timestamp id
         id = time.strftime("%Y%m%dT%H%M%S")
         dirname = "{}/{}".format(self.root, id)
 
-        item.save(dirname, audiodata, imagedata)
+        description.save(dirname, audiodata, imagedata)
 
-        self.items.append(item)
-        return item
+        self.items.append(description)
+        return description
 
     # Match the specified image against the database of images.
     # The return value is an array containing zero or more

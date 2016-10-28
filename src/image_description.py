@@ -4,12 +4,17 @@ import cv2
 import os
 import time
 
+# This exception is raised if we can't find enough features in an image
+class TooFewFeaturesException(Exception):
+    pass
+
 # These variables specify how we extract and match features from an image
 # They're initialized by ImageDescription.init()
 feature_extractor = None
 feature_matcher = None
 ratio_test_k = None
 histogram_weight = None
+minimum_keypoints = None
 
 class ImageDescription:
     # Static class initializer method.
@@ -48,6 +53,8 @@ class ImageDescription:
         ratio_test_k = options.matching_ratio_test_k
         global histogram_weight
         histogram_weight = options.matching_histogram_weight
+        global minimum_keypoints
+        minimum_keypoints = options.matching_keypoints_threshold
 
 
     # Private constructor. Use one of the factory functions below
@@ -71,15 +78,17 @@ class ImageDescription:
     # or any associated audio data until it is saved with the write() method
     @staticmethod
     def fromImage(imagedata):
-        # Calculate color histogram.
-        histogram = cv2.calcHist([imagedata], [0, 1, 2], None,
-                                 [8, 8, 8], [0, 256, 0, 256, 0, 256])
-        histogram = cv2.normalize(histogram, histogram).flatten()
-
         # Extract all possible keypoints from the frame.
         grayscale = cv2.cvtColor(imagedata, cv2.COLOR_BGR2GRAY)
         (keypoints, features) = feature_extractor.detectAndCompute(grayscale,
                                                                    None)
+        if len(keypoints) < minimum_keypoints:
+            raise TooFewFeaturesException()
+
+        # Calculate color histogram.
+        histogram = cv2.calcHist([imagedata], [0, 1, 2], None,
+                                 [8, 8, 8], [0, 256, 0, 256, 0, 256])
+        histogram = cv2.normalize(histogram, histogram).flatten()
 
         return ImageDescription(None, features, histogram)
 
