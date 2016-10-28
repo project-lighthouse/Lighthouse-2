@@ -63,7 +63,6 @@ class Camera:
     # so you shouldn't have to call it manually.
     def shutdown(self):
         self.shutdown_flag.set()
-        print('shutdown called', self.shutdown_flag.is_set())
 
     def _thread(self):
         camera = cv2.VideoCapture(self.source)
@@ -90,7 +89,6 @@ class Camera:
                 self.picture_flag.clear()
 
         # Exiting
-        print('camera thread exiting')
         self.thread = None
         self.shutdown_flag.clear()
         camera.release()

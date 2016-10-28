@@ -1,5 +1,6 @@
 """Full toolchain to extract moving objects from a video, add them to a database or compare with existing objects from the database."""
 
+import sys
 import time
 import cv2
 import logging
@@ -77,7 +78,29 @@ def button_handler(event, pin):
     elif event == 'longpress':
         record_new_item()
 
+# Monitor the button for events
 eventloop = EventLoop()
 eventloop.monitor_gpio_button(options.gpio_pin, button_handler,
                               doubleclick_speed=0);
+
+#
+# If you don't have a button, use --cmd-ui to monitor the keyboard instead
+#
+if options.cmd_ui:
+    def keyboard_handler(s):
+        if s == 'R' or s == 'r':
+            record_new_item()
+        elif s == 'M' or s == 'm':
+            match_item()
+        elif s == 'Q' or s == 'q':
+            sys.exit(0)
+        else:
+            print('Enter R to record a new item'
+                  ' or M to match an item'
+                  ' or Q to quit')
+    keyboard_handler('') # Print instructions
+    # Monitor it on the event loop
+    eventloop.monitor_console(keyboard_handler, prompt="Command:")
+
+# Run the event loop forever
 eventloop.loop()

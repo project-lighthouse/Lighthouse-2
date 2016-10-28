@@ -1,4 +1,5 @@
 import time
+from threading import Thread
 from threading import Timer  # For running code after a delay
 from Queue import Queue      # For a thread-safe event queue
 import RPi.GPIO as GPIO      # So we can read Raspberry Pi GPIO pins
@@ -7,6 +8,14 @@ import RPi.GPIO as GPIO      # So we can read Raspberry Pi GPIO pins
 # want to refer to GPIO pins by their chipset number not the actual
 # pin number on the circuit board. You can call setmode() yourself to override.
 GPIO.setmode(GPIO.BCM)
+
+
+# Python 2.7 uses raw_input while Python 3 deprecated it in favor of input.
+# We want to use input() in either version
+try:
+    input = raw_input
+except NameError:
+    pass
 
 #
 # This EventLoop class enables event-based asynchronous programming where
@@ -225,6 +234,17 @@ class EventLoop:
         # Monitor the specified pin, and call the pin_handler function
         # when something happens on it.
         self.monitor_gpio_pin(pin, pin_handler, pull_up, debounce_time)
+
+    def monitor_console(self, callback, prompt = '>'):
+        def input_thread():
+            while True:
+                s = input(prompt)
+                self.queue.put(lambda: callback(s))
+                time.sleep(0.5)
+        t = Thread(target=input_thread)
+        t.daemon = True
+        t.start()
+
 
 # Some test code to demonstrate usage of this module
 if __name__ == "__main__":
