@@ -65,8 +65,11 @@ def playAsync(samples):
     Thread(target=lambda: _play(samples)).start()
 
 def playfile(filename):
-    with open(filename, 'rb') as f:
-        play(f.read())
+    try:
+        with open(filename, 'rb') as f:
+            play(f.read())
+    except IOError as err:
+        print("IO error: {0}".format(err))
 
 
 # Record audio from the microphone, trim off leading and trailing silence
