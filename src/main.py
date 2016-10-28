@@ -64,11 +64,14 @@ def match_item():
 
 def record_new_item():
     image = take_picture()
+    audioutils.playfile('sounds/afterthetone.raw')
     audioutils.play(start_recording_tone)
     audio = audioutils.record()
     audioutils.play(stop_recording_tone)
     item = db.add(image, audio)
     print("added image in {}".format(item.dirname))
+    audioutils.playfile('sounds/registered.raw')
+    audioutils.play(audio)
 
 def button_handler(event, pin):
     if event == 'press':
