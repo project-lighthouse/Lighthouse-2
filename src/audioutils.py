@@ -1,7 +1,9 @@
+from __future__ import division
 import math
 import time
 from array import array
 from threading import Thread
+import os
 import alsaaudio
 
 ALSA_SPEAKER = "plug:default"     # ALSA device identifier
@@ -28,7 +30,7 @@ def makebeep(frequency, duration):
     angle_per_sample = 2 * math.pi / samples_per_cycle;
     phase = 0.0;
     for i in range(0, numsamples):
-        factor = 1.0 - (float(i)/numsamples)
+        factor = 1 - (i / numsamples)
         samples.append(int(factor * 32000 * math.sin(phase)))
         phase = (phase + angle_per_sample) % (2*math.pi)
 
@@ -44,7 +46,7 @@ def _play(samples):
     speaker.setchannels(1)
     speaker.setrate(SAMPLES_PER_SECOND)
     speaker.setformat(FORMAT)
-    speaker.setperiodsize(len(samples)/BYTES_PER_SAMPLE)
+    speaker.setperiodsize(len(samples)//BYTES_PER_SAMPLE)
     speaker.write(samples)
 
 def play(samples):
@@ -55,9 +57,9 @@ def play(samples):
     start = time.time()
     _play(samples)
     end = time.time()
-    duration = float(len(samples))/(BYTES_PER_SAMPLE * SAMPLES_PER_SECOND)
+    duration = len(samples)/(BYTES_PER_SAMPLE * SAMPLES_PER_SECOND)
     elapsed = end - start
-    if duration - elapsed > 0:
+    if duration > elapsed:
         time.sleep(duration - elapsed)
 
 # Play the sound using a thread so we can return right away
@@ -66,8 +68,24 @@ def playAsync(samples):
 
 def playfile(filename):
     try:
+        filesize = os.path.getsize(filename)
         with open(filename, 'rb') as f:
-            play(f.read())
+            speaker = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK, card=ALSA_SPEAKER)
+            speaker.setchannels(1)
+            speaker.setrate(SAMPLES_PER_SECOND)
+            speaker.setformat(FORMAT)
+            speaker.setperiodsize(1000)
+            starttime = time.time();
+            while True:
+                samples = f.read(2000)
+                if not samples:
+                    break;
+                speaker.write(samples)
+            duration = filesize/(BYTES_PER_SAMPLE * SAMPLES_PER_SECOND)
+            elapsed = time.time() - starttime
+            if duration > elapsed:
+                time.sleep(duration - elapsed)
+
     except IOError as err:
         print("IO error: {0}".format(err))
 
@@ -106,7 +124,7 @@ def record(min_duration=1,         # Record at least this many seconds
         chunkarray = array('h', chunk)
         recording.extend(chunkarray)
 
-        chunk_duration = float(len(chunkarray)) / SAMPLES_PER_SECOND
+        chunk_duration = len(chunkarray) / SAMPLES_PER_SECOND
         elapsed += chunk_duration
         chunk_max = max(chunkarray)
 
