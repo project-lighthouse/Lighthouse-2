@@ -1,9 +1,11 @@
 """Full toolchain to extract moving objects from a video, add them to a database or compare with existing objects from the database."""
 
 import sys
+import os
 import time
 import cv2
 import logging
+import subprocess
 import config
 from camera import Camera
 from eventloop import EventLoop
@@ -31,12 +33,26 @@ stop_recording_tone = audioutils.makebeep(400, .2)
 with open('sounds/shutter.raw', 'rb') as f:
     shutter = f.read()
 
+# Load the database of items we know about
 db = ImageDatabase(options)
 
+# Initialize the camera object we'll use to take pictures
 camera = Camera(options.video_source,
                 options.video_width,
                 options.video_height,
                 options.video_fps)
+
+# If we are going to be logging photos that the user takes,
+# make sure the log directory exists
+if options.photo_log and not os.path.isdir(options.photo_log):
+    os.makedirs(options.photo_log)
+
+# If --web-root was specified, run a web server in a separate process
+# to expose the files in that directory.
+# Note that we're using port 80, assuming we'll always run as root
+if options.web_root:
+    server = subprocess.Popen(['python', '-m', 'SimpleHTTPServer', '80'],
+                              cwd=options.web_root)
 
 def take_picture():
     audioutils.playAsync(shutter)
@@ -63,6 +79,14 @@ def match_item():
             for (score,match) in matches:
                 audioutils.playfile(match.audio_filename())
                 time.sleep(0.2)
+
+        if options.photo_log:
+            start = time.time();
+            filename = "{}/{}.jpeg".format(options.photo_log,
+                                           time.strftime("%Y%m%dT%H%M%S"))
+            cv2.imwrite(filename, image)
+            print("photo saved in {}s".format(time.time()-start))
+
     except TooFewFeaturesException:
         print('Too few features')
         audioutils.playfile('sounds/nothing_recognized.raw')

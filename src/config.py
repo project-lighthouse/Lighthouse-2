@@ -26,8 +26,8 @@ def getConfig():
     # parser.set_defaults(rebuild_db=False)
 
     group.add_argument('--db-path', 
-                       help='Path to the database of image features (default: ~/Data).',
-                       default='~/Data')
+                       help='Path to the database of image features (default: ~/Lighthouse/Data).',
+                       default='~/Lighthouse/Data')
     group.add_argument('--db-store-images', help='Indicates whether we want to store raw images altogether with features.',
                        action='store_true')
 
@@ -151,6 +151,14 @@ def getConfig():
                        help='The ALSA device name for the microphone',
                        default='plughw:1')
 
+    group.add_argument('--photo-log', 
+                       help='Directory where photos should be stored (default: ~/Lighthouse/Log)',
+                       default='~/Lighthouse/Log')
+
+    group.add_argument('--web-root',
+                       help='Root directory for debugging web server (default: ~/Lighthouse)',
+                       default='~/Lighthouse')
+
     args = parser.parse_args()
 
     #
@@ -164,5 +172,9 @@ def getConfig():
 
     # Expand user- and relative-paths.
     args.db_path = os.path.abspath(os.path.expanduser(args.db_path))
+    if args.photo_log:
+        args.photo_log = os.path.abspath(os.path.expanduser(args.photo_log))
+    if args.web_root:
+        args.web_root = os.path.abspath(os.path.expanduser(args.web_root))
 
     return args
