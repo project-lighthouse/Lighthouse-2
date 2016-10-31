@@ -129,7 +129,15 @@ class ImageDescription:
     # Larger numbers are better matches
     def compare_to(self, other):
         start = time.time()
-        matches = feature_matcher.knnMatch(self.features, other.features, k=2)
+        # XXX: check that I've got the order right.
+        # other.features should be the features of the stored item image
+        # self.features should be the features of the new scene.
+        # We're trying to figure out if the item appears in the scene
+        # so we're looking for matches between the item's features
+        # and the scene's features.
+        # The order of the first two arguments here should match the 
+        # order below in draw_match
+        matches = feature_matcher.knnMatch(other.features, self.features, k=2)
 
         if len(matches) == 0:
             return 0
@@ -166,3 +174,29 @@ class ImageDescription:
             score += histogram_weight * histogram_correlation
 
         return score
+
+    def draw_match(self, scene):
+        item = cv2.imread(self.image_filename())
+        grayitem = cv2.cvtColor(item, cv2.COLOR_BGR2GRAY)
+        itemkp, itemfeat = feature_extractor.detectAndCompute(grayitem, None)
+
+        grayscene = cv2.cvtColor(scene, cv2.COLOR_BGR2GRAY)
+        scenekp, scenefeat = feature_extractor.detectAndCompute(grayscene, None)
+
+        matches = feature_matcher.knnMatch(itemfeat, scenefeat, k=2)
+
+        good_matches = []
+        for match in matches:
+            if len(match) == 2:
+                d1 = match[0].distance
+                d2 = match[1].distance
+                if d1 < ratio_test_k * d2:
+                    good_matches.append(match[0])
+
+        good_matches = sorted(good_matches, key=lambda x:x.distance)
+
+        match_image = cv2.drawMatches(item, itemkp,
+                                      scene, scenekp,
+                                      good_matches[:25], # top 25 only
+                                      None) #flags=2)
+        return match_image

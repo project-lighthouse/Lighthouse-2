@@ -80,12 +80,16 @@ def match_item():
                 audioutils.playfile(match.audio_filename())
                 time.sleep(0.2)
 
-        if options.photo_log:
+        if options.photo_log and len(matches) > 0:
             start = time.time();
             filename = "{}/{}.jpeg".format(options.photo_log,
                                            time.strftime("%Y%m%dT%H%M%S"))
-            cv2.imwrite(filename, image)
-            print("photo saved in {}s".format(time.time()-start))
+            (score,item) = matches[0]
+            match_image = item.draw_match(image)
+            cv2.putText(match_image, "Score: {}".format(score), (10,25),
+                        cv2.FONT_HERSHEY_PLAIN, 1, (255,255,255))
+            cv2.imwrite(filename, match_image)
+            print("match photo saved in {}s".format(time.time()-start))
 
     except TooFewFeaturesException:
         print('Too few features')
