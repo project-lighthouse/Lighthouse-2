@@ -108,11 +108,10 @@ class EventLoop(object):
                 # Read the state of the pin: a 0 or 1
                 state = GPIO.input(pin)
                 # Put a function in the queue to call the callback
-                self.queue.put(lambda: callback(pin, state, event_time))
+                self.queue.put(lambda: callback(pin, state))
                 self.debouncing = False
 
             self.debouncing = True   # Ignore events on this pin while true
-            event_time = time.time() # Note the actual time of this event
             # Start the debounce timer
             Timer(debounce_time, debounce_handler).start()
 

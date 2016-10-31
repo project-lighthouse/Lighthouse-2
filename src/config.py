@@ -157,7 +157,10 @@ def get_config():
                        help='Directory where photos should be stored (default: ~/Lighthouse/Log)',
                        default='~/Lighthouse/Log')
 
-    group.add_argument('--web-root',
+    group.add_argument('--web-server',
+                       help='Indicates whether we want to run web server on device (default: false).',
+                       action='store_true')
+    group.add_argument('--web-server-root',
                        help='Root directory for debugging web server (default: ~/Lighthouse)',
                        default='~/Lighthouse')
 
@@ -175,7 +178,8 @@ def get_config():
     args.db_path = os.path.abspath(os.path.expanduser(args.db_path))
     if args.photo_log:
         args.photo_log = os.path.abspath(os.path.expanduser(args.photo_log))
-    if args.web_root:
-        args.web_root = os.path.abspath(os.path.expanduser(args.web_root))
+    if args.web_server_root:
+        args.web_server_root = os.path.abspath(
+            os.path.expanduser(args.web_server_root))
 
     return args
