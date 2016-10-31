@@ -1,8 +1,9 @@
-#pylint: skip-file
-import cv2
-import time
+from __future__ import print_function
+
 from Queue import Queue
 from threading import Thread, Event, Timer
+import cv2
+
 
 #
 # This class wraps cv2.VideoCapture, and the capture() method returns
@@ -17,7 +18,7 @@ from threading import Thread, Event, Timer
 # frames are not buffered up. Because of this background thread, caling
 # capture() returns the latest frame
 #
-class Camera:
+class Camera(object):
     def __init__(self, source, width=640, height=480, fps=15, shutdown_time=15):
         # Parameters for the VideoCapture object
         self.source = source
@@ -82,7 +83,7 @@ class Camera:
         while not self.shutdown_flag.is_set():
             camera.grab()
             if self.picture_flag.is_set():
-                retval, image = camera.retrieve()
+                _, image = camera.retrieve()
                 shutdown_timer.cancel()
                 shutdown_timer = Timer(self.shutdown_time, self.shutdown)
                 shutdown_timer.start()

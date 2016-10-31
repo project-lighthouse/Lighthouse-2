@@ -7,7 +7,9 @@ disable=file-ignored,
         locally-disabled,
         missing-docstring,
         no-member,
-        relative-import
+        relative-import,
+        too-many-arguments,
+        too-many-instance-attributes
 
 [REPORTS]
 reports=yes
