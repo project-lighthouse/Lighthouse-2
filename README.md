@@ -1,3 +1,5 @@
+<a href='https://travis-ci.org/project-lighthouse/Lighthouse-2'><img src='https://secure.travis-ci.org/project-lighthouse/Lighthouse-2.png?branch=prototype'></a>
+
 # More experiment for helping out blind people
 
 For the moment, these experiments concentrate on detecting objects shaken in
