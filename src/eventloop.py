@@ -1,4 +1,6 @@
-#pylint: skip-file
+# pylint: disable=redefined-builtin,attribute-defined-outside-init
+from __future__ import print_function
+
 import time
 from threading import Thread
 from threading import Timer  # For running code after a delay
@@ -33,7 +35,7 @@ except NameError:
 # Call exit() to force loop() to exit. In typical use, this will also make
 # your entire program exit.
 #
-class EventLoop:
+class EventLoop(object):
     def __init__(self):
         self.queue = Queue()
         self.debouncing = False
@@ -52,7 +54,7 @@ class EventLoop:
     # will generally cause your program to exit as well.
     def exit(self):
         self.running = False         # Set the flag
-        self.queue.put(lambda:None)  # Unblock the queue if necessary
+        self.queue.put(lambda: None)  # Unblock the queue if necessary
 
     # This method waits the specified number of seconds and then puts
     # the function f onto the queue. Assuming that you have called loop()
@@ -158,18 +160,18 @@ class EventLoop:
         # Create an object that will hold the state values shared by the
         # nested functions below. (In Python 3 we could use nonlocal variables
         # but for Python 2, we need to use object attributes.)
-        class State:
+        class State(object):
             pass
-        state = State(); 
+        state = State()
 
         # We handle events using a simple finite state machine.
         # This is the state variable for that FSM.
-        state.buttonstate = 0;
+        state.buttonstate = 0
         # We also store some timer objects so we can cancel them as needed
         state.longpress_timer = None
         state.doubleclick_timer = None
 
-        def pin_handler(pin, pinstate, time):
+        def pin_handler(pin, pinstate):
             # Convert the 0/1 state of the pin to a pressed/released boolean
             pressed = not bool(pinstate) if pull_up else bool(pinstate)
 
@@ -214,7 +216,7 @@ class EventLoop:
                     # This means we don't need another state to wait for that
                     # release and we can just return to the ground state.
                     callback('doubleclick', pin)
-                    state.buttonstate = 0;
+                    state.buttonstate = 0
                 else:
                     pass
 
@@ -236,7 +238,7 @@ class EventLoop:
         # when something happens on it.
         self.monitor_gpio_pin(pin, pin_handler, pull_up, debounce_time)
 
-    def monitor_console(self, callback, prompt = '>'):
+    def monitor_console(self, callback, prompt='>'):
         def input_thread():
             while True:
                 s = input(prompt)
@@ -248,36 +250,36 @@ class EventLoop:
 
 
 # Some test code to demonstrate usage of this module
-if __name__ == "__main__":
-
-    loop = EventLoop()
-
-    # demonstrate the loop.later() method
-    def one():
-        print('one second')
-        loop.later(two, 1)
-    def two():
-        print('two seconds')
-        loop.later(three, 1)
-    def three():
-        print('three seconds')
-    loop.later(one, 1)
-
-    # Demonstrate the loop.monitor_gpio_button() method
-    # This assumes you have a push button wired between GPIO26 and ground
-    print('doubleclick three times to quit')
-    global doubleclicks
-    doubleclicks = 0
-
-    def button_handler(event, pin):
-        print(event)
-        global doubleclicks
-        if event == 'doubleclick':
-            doubleclicks += 1
-            if doubleclicks == 3:
-                loop.exit()
-
-    loop.monitor_gpio_button(26, button_handler)
-
-    # Run the event loop forever or until loop.exit() is called
-    loop.loop()
+# if __name__ == "__main__":
+#
+#     loop = EventLoop()
+#
+#     # demonstrate the loop.later() method
+#     def one():
+#         print('one second')
+#         loop.later(two, 1)
+#     def two():
+#         print('two seconds')
+#         loop.later(three, 1)
+#     def three():
+#         print('three seconds')
+#     loop.later(one, 1)
+#
+#     # Demonstrate the loop.monitor_gpio_button() method
+#     # This assumes you have a push button wired between GPIO26 and ground
+#     print('doubleclick three times to quit')
+#     global doubleclicks
+#     doubleclicks = 0
+#
+#     def button_handler(event, pin):
+#         print(event)
+#         global doubleclicks
+#         if event == 'doubleclick':
+#             doubleclicks += 1
+#             if doubleclicks == 3:
+#                 loop.exit()
+#
+#     loop.monitor_gpio_button(26, button_handler)
+#
+#     # Run the event loop forever or until loop.exit() is called
+#     loop.loop()

@@ -1,6 +1,5 @@
 [MESSAGES CONTROL]
-disable=file-ignored,
-        fixme,
+disable=fixme,
         global-statement,
         import-error,
         invalid-name,
@@ -8,6 +7,7 @@ disable=file-ignored,
         missing-docstring,
         no-member,
         relative-import,
+        too-few-public-methods,
         too-many-arguments,
         too-many-instance-attributes,
         too-many-locals
