@@ -5,12 +5,13 @@ disable=fixme,
         invalid-name,
         locally-disabled,
         missing-docstring,
-        no-member,
         relative-import,
-        too-few-public-methods,
         too-many-arguments,
         too-many-instance-attributes,
         too-many-locals
+
+[TYPECHECK]
+ignored-modules=cv2
 
 [REPORTS]
 reports=yes

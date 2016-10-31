@@ -1,4 +1,4 @@
-# pylint: disable=redefined-builtin,attribute-defined-outside-init
+# pylint: disable=redefined-builtin,attribute-defined-outside-init,too-few-public-methods
 from __future__ import print_function
 
 import time

@@ -48,11 +48,7 @@ class ImageDatabase(object):
         start = time.time()
         target = ImageDescription.from_image(image_data)
 
-        scores = []
-        for _, item in enumerate(self.items):
-            score = target.compare_to(item)
-            scores.append((score, item))
-
+        scores = [(target.compare_to(item), item) for item in self.items]
         scores.sort(key=lambda s: s[0], reverse=True)
 
         # Loop though the scores until we find one that is bigger than the
