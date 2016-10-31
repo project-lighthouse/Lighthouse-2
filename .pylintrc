@@ -1,0 +1,11 @@
+[MESSAGES CONTROL]
+disable=global-statement,
+        import-error,
+        invalid-name,
+        locally-disabled,
+        missing-docstring,
+        no-member,
+        relative-import
+
+[REPORTS]
+reports=yes

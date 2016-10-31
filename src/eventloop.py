@@ -1,3 +1,4 @@
+#pylint: skip-file
 import time
 from threading import Thread
 from threading import Timer  # For running code after a delay

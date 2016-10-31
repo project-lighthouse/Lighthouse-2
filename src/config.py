@@ -1,9 +1,11 @@
+# pylint: disable=line-too-long
 import argparse
 import os
 
+
 # XXX Commented out arguments are for experimental code that is
 # not currently in use
-def getConfig():
+def get_config():
     parser = argparse.ArgumentParser(description="Lighthouse prototype")
 
     #
@@ -25,7 +27,7 @@ def getConfig():
     # group.add_argument('--no-rebuild-db', help='Do not rebuild the database (default).', dest='rebuild_db', action='store_false')
     # parser.set_defaults(rebuild_db=False)
 
-    group.add_argument('--db-path', 
+    group.add_argument('--db-path',
                        help='Path to the database of image features (default: ~/Lighthouse/Data).',
                        default='~/Lighthouse/Data')
     group.add_argument('--db-store-images', help='Indicates whether we want to store raw images altogether with features.',
@@ -151,7 +153,7 @@ def getConfig():
                        help='The ALSA device name for the microphone',
                        default='plughw:1')
 
-    group.add_argument('--photo-log', 
+    group.add_argument('--photo-log',
                        help='Directory where photos should be stored (default: ~/Lighthouse/Log)',
                        default='~/Lighthouse/Log')
 
@@ -168,7 +170,6 @@ def getConfig():
     #     args.acquisition_buffer_init = .01
     # elif args.acquisition_buffer_init >= 1:
     #     args.acquisition_buffer_init = .99
-
 
     # Expand user- and relative-paths.
     args.db_path = os.path.abspath(os.path.expanduser(args.db_path))

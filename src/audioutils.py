@@ -1,3 +1,4 @@
+#pylint: skip-file
 from __future__ import division
 import math
 import time
