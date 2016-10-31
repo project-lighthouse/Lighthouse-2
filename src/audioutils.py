@@ -1,5 +1,5 @@
-#pylint: skip-file
-from __future__ import division
+from __future__ import division, print_function
+
 import math
 import time
 from array import array
@@ -27,9 +27,9 @@ def makebeep(frequency, duration):
     # Generate the waveform for this beep
     samples = array('h')
     numsamples = int(SAMPLES_PER_SECOND * duration)
-    samples_per_cycle = SAMPLES_PER_SECOND / frequency;
-    angle_per_sample = 2 * math.pi / samples_per_cycle;
-    phase = 0.0;
+    samples_per_cycle = SAMPLES_PER_SECOND / frequency
+    angle_per_sample = 2 * math.pi / samples_per_cycle
+    phase = 0.0
     for i in range(0, numsamples):
         factor = 1 - (i / numsamples)
         samples.append(int(factor * 32000 * math.sin(phase)))
@@ -41,7 +41,7 @@ def makebeep(frequency, duration):
 # This function expects and array or bytes object like those returned
 # by the makebeep() and record() functions.
 def _play(samples):
-    if (len(samples) == 0):
+    if len(samples) == 0:
         return
     speaker = alsaaudio.PCM(alsaaudio.PCM_PLAYBACK, card=ALSA_SPEAKER)
     speaker.setchannels(1)
@@ -76,11 +76,11 @@ def playfile(filename):
             speaker.setrate(SAMPLES_PER_SECOND)
             speaker.setformat(FORMAT)
             speaker.setperiodsize(1000)
-            starttime = time.time();
+            starttime = time.time()
             while True:
                 samples = f.read(2000)
                 if not samples:
-                    break;
+                    break
                 speaker.write(samples)
             duration = filesize/(BYTES_PER_SAMPLE * SAMPLES_PER_SECOND)
             elapsed = time.time() - starttime
@@ -121,7 +121,7 @@ def record(min_duration=1,         # Record at least this many seconds
     recording = array('h')
 
     while elapsed < max_duration:
-        l, chunk = mic.read()
+        _, chunk = mic.read()
         chunkarray = array('h', chunk)
         recording.extend(chunkarray)
 
@@ -147,45 +147,45 @@ def record(min_duration=1,         # Record at least this many seconds
             break
 
     # trim the silence from the start and end of the recording
-    start = 0;
+    start = 0
     end = len(recording) - 1
-    while(start < len(recording) and recording[start] < silence_threshold):
+    while start < len(recording) and recording[start] < silence_threshold:
         start += 1
-    while(end > start and recording[end] < silence_threshold):
+    while end > start and recording[end] < silence_threshold:
         end -= 1
     recording = recording[start:end+1]
-    return recording;
+    return recording
 
-if __name__ == '__main__':
-
-    from eventloop import EventLoop
-
-    print('longpress to record');
-    print('click to play back recording');
-    print('doubleclick to quit');
-    eventloop = EventLoop()
-
-    recording = None
-    start_recording_tone = makebeep(800, .2)
-    stop_recording_tone = makebeep(400, .2)
-
-    def button_handler(event, pin):
-        global recording
-        if pin != 26:
-            return
-        if event == 'click':
-            if recording:
-                play(recording)
-            else:
-                print("long press to make a recording")
-        elif event == 'longpress':
-            play(start_recording_tone)
-            time.sleep(0.1)  # don't pick up any of the tone in the mic
-            recording = record()
-            play(stop_recording_tone)
-        elif event == 'doubleclick':
-            eventloop.exit()
-
-
-    eventloop.monitor_gpio_button(26, button_handler);
-    eventloop.loop()
+# if __name__ == '__main__':
+#
+#     from eventloop import EventLoop
+#
+#     print('longpress to record')
+#     print('click to play back recording')
+#     print('doubleclick to quit')
+#     eventloop = EventLoop()
+#
+#     recording = None
+#     start_recording_tone = makebeep(800, .2)
+#     stop_recording_tone = makebeep(400, .2)
+#
+#     def button_handler(event, pin):
+#         global recording
+#         if pin != 26:
+#             return
+#         if event == 'click':
+#             if recording:
+#                 play(recording)
+#             else:
+#                 print("long press to make a recording")
+#         elif event == 'longpress':
+#             play(start_recording_tone)
+#             time.sleep(0.1)  # don't pick up any of the tone in the mic
+#             recording = record()
+#             play(stop_recording_tone)
+#         elif event == 'doubleclick':
+#             eventloop.exit()
+#
+#
+#     eventloop.monitor_gpio_button(26, button_handler)
+#     eventloop.loop()

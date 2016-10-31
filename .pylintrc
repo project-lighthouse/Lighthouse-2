@@ -9,7 +9,8 @@ disable=file-ignored,
         no-member,
         relative-import,
         too-many-arguments,
-        too-many-instance-attributes
+        too-many-instance-attributes,
+        too-many-locals
 
 [REPORTS]
 reports=yes
