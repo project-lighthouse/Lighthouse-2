@@ -17,33 +17,26 @@ from eventloop import EventLoop
 from image_database import ImageDatabase
 from image_description import ImageDescription, TooFewFeaturesException
 
-options = config.get_config()
+# Define base and sounds folder paths.
+BASE_PATH = os.path.dirname(__file__)
+SOUNDS_PATH = os.path.join(BASE_PATH, 'sounds')
 
-# Set up the audio devices if they are configured
-if options.audio_out_device:
-    audioutils.ALSA_SPEAKER = options.audio_out_device
-if options.audio_in_device:
-    audioutils.ALSA_MICROPHONE = options.audio_in_device
-
-# Define some sounds that we will be playing
+# Define some sounds that we will be playing.
 START_RECORDING_TONE = audioutils.makebeep(800, .2)
 STOP_RECORDING_TONE = audioutils.makebeep(400, .2)
+SHUTTER_TONE = None
 
-with open('sounds/shutter.raw', 'rb') as f:
-    SHUTTER_TONE = f.read()
+db = None
+camera = None
 
-# Load the database of items we know about.
-db = ImageDatabase(options)
-
-# Initialize the camera object we'll use to take pictures.
-camera = Camera(options.video_source,
-                options.video_width,
-                options.video_height,
-                options.video_fps)
+options = config.get_config()
 
 logging.basicConfig(level=logging.DEBUG if options.verbose else logging.INFO)
-
 logger = logging.getLogger(__name__)
+
+
+def get_sound(name):
+    return os.path.join(SOUNDS_PATH, name)
 
 
 def take_picture():
@@ -67,7 +60,7 @@ def match_item():
             matches = db.match(image)
         except TooFewFeaturesException:
             print('Too few features')
-            audioutils.playfile('sounds/nothing_recognized.raw')
+            audioutils.playfile(get_sound('nothing_recognized.raw'))
             return
         else:
             matches_count = len(matches)
@@ -75,12 +68,12 @@ def match_item():
                 break
 
     if matches_count == 0:
-        audioutils.playfile('sounds/noitem.raw')
+        audioutils.playfile(get_sound('noitem.raw'))
     elif matches_count == 1:
         (_, item) = matches[0]
         audioutils.playfile(item.audio_filename())
     else:
-        audioutils.playfile('sounds/multipleitems.raw')
+        audioutils.playfile(get_sound('multipleitems.raw'))
         for (_, match) in matches:
             audioutils.playfile(match.audio_filename())
             time.sleep(0.2)
@@ -94,7 +87,7 @@ def match_item():
         cv2.putText(match_image, "Score: {}".format(score), (10, 25),
                     cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
         cv2.imwrite(filename, match_image)
-        print("match photo saved in {}s".format(time.time() - start))
+        logger.debug("match photo saved in %s", time.time() - start)
 
 
 def record_new_item():
@@ -103,22 +96,22 @@ def record_new_item():
         description = ImageDescription.from_image(image)
     except TooFewFeaturesException:
         print('Too few features')
-        audioutils.playfile('sounds/nothing_recognized.raw')
+        audioutils.playfile(get_sound('nothing_recognized.raw'))
         return
 
     audio = None
     while audio is None:
-        audioutils.playfile('sounds/afterthetone.raw')
+        audioutils.playfile(get_sound('afterthetone.raw'))
         audioutils.play(START_RECORDING_TONE)
         audio = audioutils.record()
         audioutils.play(STOP_RECORDING_TONE)
         if len(audio) < 800:  # if we got less than 50ms of sound
             audio = None
-            audioutils.playfile('sounds/nosound.raw')
+            audioutils.playfile(get_sound('nosound.raw'))
 
     item = db.add(image, audio, description)
     print("added image in {}".format(item.dirname))
-    audioutils.playfile('sounds/registered.raw')
+    audioutils.playfile(get_sound('registered.raw'))
     audioutils.play(audio)
 
 
@@ -147,6 +140,27 @@ def keyboard_handler(key=None):
 
 
 def main():
+    # Load the database of items we know about.
+    global db
+    db = ImageDatabase(options)
+
+    # Initialize the camera object we'll use to take pictures.
+    global camera
+    camera = Camera(options.video_source,
+                    options.video_width,
+                    options.video_height,
+                    options.video_fps)
+
+    with open(get_sound('shutter.raw'), 'rb') as f:
+        global SHUTTER_TONE
+        SHUTTER_TONE = f.read()
+
+    # Set up the audio devices if they are configured
+    if options.audio_out_device:
+        audioutils.ALSA_SPEAKER = options.audio_out_device
+    if options.audio_in_device:
+        audioutils.ALSA_MICROPHONE = options.audio_in_device
+
     # If we are going to be logging photos that the user takes,
     # make sure the log directory exists.
     if options.photo_log and not os.path.isdir(options.photo_log):
@@ -169,7 +183,7 @@ def main():
         # Print instructions.
         keyboard_handler()
         # Monitor it on the event loop.
-        eventloop.monitor_console(keyboard_handler, prompt="Command:")
+        eventloop.monitor_console(keyboard_handler, prompt="Command: ")
 
     # Run the event loop forever
     eventloop.loop()
