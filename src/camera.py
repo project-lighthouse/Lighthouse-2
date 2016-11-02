@@ -1,5 +1,4 @@
-from __future__ import print_function
-
+import logging
 from Queue import Queue
 from threading import Thread, Event, Timer
 import cv2
@@ -15,11 +14,13 @@ import cv2
 #
 # In order to make this work, however, this class runs a thread that
 # repeatedly calls grab() on the VideoCapture object to so that old
-# frames are not buffered up. Because of this background thread, caling
-# capture() returns the latest frame
+# frames are not buffered up. Because of this background thread, calling
+# capture() returns the latest frame.
 #
 class Camera(object):
     def __init__(self, source, width=640, height=480, fps=15, shutdown_time=15):
+        self.logger = logging.getLogger(__name__)
+
         # Parameters for the VideoCapture object
         self.source = source
         self.width = width
@@ -46,6 +47,7 @@ class Camera(object):
     # Return the most recently grabbed frame from the camera, starting
     # the camera if necessary.
     def capture(self):
+        self.logger.debug("Capture is requested.")
         self.start()             # start the camera if necessary
         self.picture_flag.set()  # ask for a picture
         image = self.queue.get() # block until it appears on the queue
@@ -55,10 +57,12 @@ class Camera(object):
     # you can call this in advance of capture to speed things up a bit.
     def start(self):
         if self.thread:
+            self.logger.debug("Capture thread is already started.")
             return
         self.thread = Thread(name="camera-thread", target=self._thread)
         self.thread.daemon = True
         self.thread.start()
+        self.logger.debug("Capture thread is started.")
 
     # Call this to shut the camera (and its thread) down.
     # It will automatically shutdown after self.shutdown_time seconds
@@ -69,8 +73,11 @@ class Camera(object):
     def _thread(self):
         camera = cv2.VideoCapture(self.source)
 
+        # FIXME: We should do something about it, either crash entire program
+        # or use a loop with few seconds delay that will be constantly trying
+        # to open camera, that will crash program after several attempts anyway.
         if camera is None or not camera.isOpened():
-            print("Error: can't open camera")
+            logging.error("Can't open camera.")
             return
 
         camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
@@ -83,6 +90,7 @@ class Camera(object):
         while not self.shutdown_flag.is_set():
             camera.grab()
             if self.picture_flag.is_set():
+                self.logger.debug("Retrieving a new frame.")
                 _, image = camera.retrieve()
                 shutdown_timer.cancel()
                 shutdown_timer = Timer(self.shutdown_time, self.shutdown)
@@ -94,3 +102,5 @@ class Camera(object):
         self.thread = None
         self.shutdown_flag.clear()
         camera.release()
+
+        self.logger.debug("Camera thread is stopped.")

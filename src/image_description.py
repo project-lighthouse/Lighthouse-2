@@ -173,8 +173,8 @@ class ImageDescription(object):
 
         # If the two images have similar numbers of keypoints this number will
         # be high and will increase the score.
-        feature_ratio = 1 - abs(len(self.features) - len(other.features)) /\
-                            len(other.features)
+        # feature_ratio = 1 - abs(len(self.features) - len(other.features)) /\
+        #                     len(other.features)
 
         # If most of the feature matches are good ones this ratio will be high
         # and will increase the score.
@@ -183,7 +183,7 @@ class ImageDescription(object):
         # Both of the numbers above are between 0 and 1. We take their product
         # and multiply by 100 to create a score between 0 and 100. Kind of a
         # match percentage.
-        score = feature_ratio * good_match_ratio * 100
+        score = good_match_ratio * 100  # feature_ratio * good_match_ratio * 100
 
         # Now boost the score based on how well the histograms match
         if histogram_weight:
@@ -192,7 +192,9 @@ class ImageDescription(object):
                                                     cv2.HISTCMP_CORREL)
             score += histogram_weight * histogram_correlation
 
-        logger.debug("Comparison has been made in %ss", time.time() - start)
+        logger.debug("Comparison has been made in %ss (matches: %s, "
+                     "good matches: %s, score: %s)", time.time() - start,
+                     len(matches), good_matches, score)
 
         return score
 

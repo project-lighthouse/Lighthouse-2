@@ -1,5 +1,6 @@
 # pylint: disable=line-too-long
 import argparse
+import logging.config
 import os
 
 
@@ -120,8 +121,8 @@ def get_config():
                        help='Threshold for hessian keypoint detector used in SURF detector (default: 1000)', default=1000,
                        type=int)
     group.add_argument('--matching-score-threshold',
-                       help='Minimal matching score threshold below which we consider image as not matched (default: 5)',
-                       default=5.0, type=float)
+                       help='Minimal matching score threshold below which we consider image as not matched (default: 10)',
+                       default=10, type=float)
     group.add_argument('--matching-score-ratio',
                        help='Secondary matches must have a score at least this fraction of the best match (default: 0.5)',
                        default=0.5, type=float)
@@ -153,8 +154,8 @@ def get_config():
                        help='The ALSA device name for the microphone',
                        default='plughw:1')
 
-    group.add_argument('--photo-log',
-                       help='Directory where photos should be stored (default: ~/Lighthouse/Log)',
+    group.add_argument('--log-path',
+                       help='Directory where all possible logs are stored (default: ~/Lighthouse/Log)',
                        default='~/Lighthouse/Log')
 
     group.add_argument('--web-server',
@@ -176,10 +177,52 @@ def get_config():
 
     # Expand user- and relative-paths.
     args.db_path = os.path.abspath(os.path.expanduser(args.db_path))
-    if args.photo_log:
-        args.photo_log = os.path.abspath(os.path.expanduser(args.photo_log))
+
+    if args.log_path:
+        args.log_path = os.path.abspath(os.path.expanduser(args.log_path))
+
+        if not os.path.isdir(args.log_path):
+            os.makedirs(args.log_path)
+
     if args.web_server_root:
         args.web_server_root = os.path.abspath(
             os.path.expanduser(args.web_server_root))
+
+    # Setup logging.
+    logging.config.dictConfig({
+        'version': 1,
+        'formatters': {
+            'standard': {
+                'format': '%(module)s:%(levelname)s %(message)s'
+            },
+
+            'detailed': {
+                'format': '%(asctime)s:%(module)s:%(levelname)s %(message)s'
+            }
+        },
+        'handlers': {
+            'default': {
+                'class': 'logging.StreamHandler',
+                'formatter': 'standard'
+            },
+            'file': {
+                # Once max size is reached, log file will be overridden.
+                'class': 'logging.handlers.RotatingFileHandler',
+                'formatter': 'detailed',
+                # Max 1GB log.
+                'maxBytes': 1048576000,
+                'filename': os.path.join(args.log_path, 'log.log'),
+                'backupCount': 5,
+                'encoding': 'utf8'
+            }
+        },
+        'loggers': {
+            '': {
+                'handlers': ['default', 'file'],
+                'level': 'DEBUG' if args.verbose else 'INFO',
+                'propagate': True
+            }
+        }
+    })
 
     return args

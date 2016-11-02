@@ -31,7 +31,6 @@ camera = None
 
 options = config.get_config()
 
-logging.basicConfig(level=logging.DEBUG if options.verbose else logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -44,9 +43,26 @@ def take_picture():
     return camera.capture()
 
 
+def pick_only_accurate_matches(matches):
+    # Loop though the scores until we find one that is bigger than the
+    # threshold, or significantly bigger than the best score and then return
+    # all the matches above that one.
+    retval = []
+    best_score = matches[0][0] if len(matches) > 0 else 0
+    if best_score >= options.matching_score_threshold:
+        retval.append(matches[0])
+        for match in matches[1:]:
+            if match[0] >= options.matching_score_threshold and match[0] >= \
+                            best_score * options.matching_score_ratio:
+                retval.append(match)
+            else:
+                break
+
+    return retval
+
+
 def match_item():
     matches = []
-    matches_count = 0
 
     # Image with the larger number of matches.
     image = None
@@ -59,43 +75,65 @@ def match_item():
         try:
             matches = db.match(image)
         except TooFewFeaturesException:
-            print('Too few features')
+            logger.info("Too few features.")
             audioutils.playfile(get_sound('nothing_recognized.raw'))
             return
         else:
-            matches_count = len(matches)
-            if matches_count > 0:
+            # Once we find first accurate match, let's stop trying to find more.
+            if len(matches) > 0 and matches[0][0] >= \
+                    options.matching_score_threshold:
                 break
 
-    if matches_count == 0:
+    accurate_matches = pick_only_accurate_matches(matches)
+
+    if len(accurate_matches) == 0:
         audioutils.playfile(get_sound('noitem.raw'))
-    elif matches_count == 1:
-        (_, item) = matches[0]
+        logger.debug("No accurate matches found (closest match has score %s).",
+                     matches[0][0] if len(matches) > 0 else 0)
+    elif len(accurate_matches) == 1:
+        (score, item) = accurate_matches[0]
+        logger.debug("Found one match with score '%s'.", score)
         audioutils.playfile(item.audio_filename())
     else:
         audioutils.playfile(get_sound('multipleitems.raw'))
-        for (_, match) in matches:
+        logger.debug("Found several matches with the following scores:")
+        for (score, match) in accurate_matches:
+            logger.debug("Score: %s", score)
             audioutils.playfile(match.audio_filename())
             time.sleep(0.2)
 
-    if options.photo_log and matches_count > 0:
+    if options.log_path and len(matches) > 0:
         start = time.time()
-        filename = "{}/{}.jpeg".format(options.photo_log,
+        filename = "{}/{}.jpeg".format(options.log_path,
                                        time.strftime("%Y%m%dT%H%M%S"))
         (score, item) = matches[0]
         match_image = item.draw_match(image)
         cv2.putText(match_image, "Score: {}".format(score), (10, 25),
                     cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
         cv2.imwrite(filename, match_image)
-        logger.debug("match photo saved in %s", time.time() - start)
+        logger.debug("Match photo saved in %s", time.time() - start)
 
 
 def record_new_item():
-    image = take_picture()
-    try:
-        description = ImageDescription.from_image(image)
-    except TooFewFeaturesException:
-        print('Too few features')
+    # Make several pictures and choose the frame with the highest number of
+    # features. Sometimes camera needs more time to automatically adjust itself
+    # for the current light conditions.
+    best_description = None
+
+    audioutils.playAsync(SHUTTER_TONE)
+
+    for i in range(0, options.matching_n_frames):
+        image = take_picture()
+        try:
+            description = ImageDescription.from_image(image)
+
+            if best_description is None or len(best_description.features) < \
+                    len(description.features):
+                best_description = description
+        except TooFewFeaturesException:
+            logger.info("Too few features in the frame #%s.", i)
+
+    if best_description is None:
         audioutils.playfile(get_sound('nothing_recognized.raw'))
         return
 
@@ -110,7 +148,7 @@ def record_new_item():
             audioutils.playfile(get_sound('nosound.raw'))
 
     item = db.add(image, audio, description)
-    print("added image in {}".format(item.dirname))
+    logger.info("Added image in %s.", item.dirname)
     audioutils.playfile(get_sound('registered.raw'))
     audioutils.play(audio)
 
@@ -161,10 +199,9 @@ def main():
     if options.audio_in_device:
         audioutils.ALSA_MICROPHONE = options.audio_in_device
 
-    # If we are going to be logging photos that the user takes,
-    # make sure the log directory exists.
-    if options.photo_log and not os.path.isdir(options.photo_log):
-        os.makedirs(options.photo_log)
+    # If log path is set, make sure the corresponding directory exists.
+    if options.log_path and not os.path.isdir(options.log_path):
+        os.makedirs(options.log_path)
 
     # If --web-server was specified, run a web server in a separate process
     # to expose the files in that directory.
@@ -189,4 +226,10 @@ def main():
     eventloop.loop()
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (SystemExit, KeyboardInterrupt):
+        raise
+    except Exception:
+        logger.exception("Program crashed")
+        raise

@@ -40,6 +40,9 @@ class ImageDatabase(object):
         description.save(dir_name, audio_data, image_data)
         self.items.append(description)
 
+        self.logger.debug("Image with %s features was added to the database",
+                          len(description.features))
+
         return description
 
     # Match the specified image against the database of images. The return value
@@ -48,23 +51,13 @@ class ImageDatabase(object):
         start = time.time()
         target = ImageDescription.from_image(image_data)
 
+        self.logger.debug("Image to find a match for has %s features.",
+                          len(target.features))
+
         scores = [(target.compare_to(item), item) for item in self.items]
         scores.sort(key=lambda s: s[0], reverse=True)
 
-        # Loop though the scores until we find one that is bigger than the
-        # threshold, or significantly bigger than the best score and then return
-        # all the matches above that one.
-        retval = []
-        best_score = scores[0][0] if len(scores) > 0 else 0
-        if best_score >= self.options.matching_score_threshold:
-            retval.append(scores[0])
-            for score in scores[1:]:
-                if score[0] >= self.options.matching_score_threshold and \
-                   score[0] >= best_score * self.options.matching_score_ratio:
-                    retval.append(score)
-                else:
-                    break
-
         self.logger.debug("Matched against %s images in %ss", len(self.items),
                           time.time() - start)
-        return retval
+
+        return scores
