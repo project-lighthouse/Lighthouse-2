@@ -31,6 +31,9 @@ class Camera(object):
         # thread down
         self.shutdown_time = shutdown_time
 
+        # The timer we use to stop the camera thread
+        self.shutdown_timer = None
+
         # This is the thread that controls the camera
         self.thread = None
 
@@ -56,6 +59,7 @@ class Camera(object):
     # Call this to start the camera. If you know you'll need it soon,
     # you can call this in advance of capture to speed things up a bit.
     def start(self):
+        self._reset_shutdown_timer()
         if self.thread:
             self.logger.debug("Capture thread is already started.")
             return
@@ -69,6 +73,14 @@ class Camera(object):
     # so you shouldn't have to call it manually.
     def shutdown(self):
         self.shutdown_flag.set()
+        self.shutdown_timer.cancel()
+        self.shutdown_timer = None
+
+    def _reset_shutdown_timer(self):
+        if self.shutdown_timer:
+            self.shutdown_timer.cancel()
+        self.shutdown_timer = Timer(self.shutdown_time, self.shutdown)
+        self.shutdown_timer.start()
 
     def _thread(self):
         camera = cv2.VideoCapture(self.source)
@@ -84,17 +96,14 @@ class Camera(object):
         camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         camera.set(cv2.CAP_PROP_FPS, self.fps)
 
-        shutdown_timer = Timer(self.shutdown_time, self.shutdown)
-        shutdown_timer.start()
+        self._reset_shutdown_timer()
 
         while not self.shutdown_flag.is_set():
             camera.grab()
             if self.picture_flag.is_set():
                 self.logger.debug("Retrieving a new frame.")
                 _, image = camera.retrieve()
-                shutdown_timer.cancel()
-                shutdown_timer = Timer(self.shutdown_time, self.shutdown)
-                shutdown_timer.start()
+                self._reset_shutdown_timer()
                 self.queue.put(image)
                 self.picture_flag.clear()
 
