@@ -25,15 +25,20 @@ SOUNDS_PATH = os.path.join(BASE_PATH, 'sounds')
 # Define some sounds that we will be playing.
 START_RECORDING_TONE = audioutils.makebeep(800, .2)
 STOP_RECORDING_TONE = audioutils.makebeep(400, .2)
+CHIRP = audioutils.makebeep(600, .05)
 SHUTTER_TONE = None
 
 db = None
 camera = None
-
 options = config.get_config()
 
 logger = logging.getLogger(__name__)
 
+# Keep track of whether we're currently busy or not
+busy = False
+
+# The EventLoop object
+eventloop = None
 
 
 def get_sound(name):
@@ -193,21 +198,48 @@ def record_new_item():
     audioutils.playfile(get_sound('registered.wav'))
     audioutils.play(audio)
 
+# Play a sound that indicates that Lighthouse is ready for another button press
+def ready():
+    global busy
+    busy = False
+    audioutils.play(CHIRP)
 
 def button_handler(event, pin):
+    global busy
+
+    # If we're still processing some other event, ignore this one
+    if busy:
+        logger.debug('ignoring event %s', event)
+        return
+
     logger.debug("Pin #%s is activated by '%s' event", pin, event)
 
     if event == 'click':
+        busy = True
         match_item()
+        # run this on the event loop so we ignore any events queueed up
+        eventloop.later(ready, 0.5)
     elif event == 'longpress':
+        busy = True
         record_new_item()
+        eventloop.later(ready, 0.5)
 
 
 def keyboard_handler(key=None):
+    global busy
+
+    if busy:
+        logger.debug('ignoring key %s', key)
+        return
+
     if key == 'R' or key == 'r':
+        busy = True
         record_new_item()
+        eventloop.later(ready, 0.5)
     elif key == 'M' or key == 'm':
+        busy = True
         match_item()
+        eventloop.later(ready, 0.5)
     elif key == 'Q' or key == 'q':
         sys.exit(0)
     else:
@@ -250,6 +282,7 @@ def main():
                          cwd=options.web_server_root)
 
     # Monitor the button for events
+    global eventloop
     eventloop = EventLoop()
     eventloop.monitor_gpio_button(options.gpio_pin, button_handler,
                                   doubleclick_speed=0)
@@ -260,6 +293,9 @@ def main():
         keyboard_handler()
         # Monitor it on the event loop.
         eventloop.monitor_console(keyboard_handler, prompt="Command: ")
+
+    # Let the user know we're ready
+    ready()
 
     # Run the event loop forever
     eventloop.loop()
