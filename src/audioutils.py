@@ -1,3 +1,4 @@
+# pylint: disable=no-member
 from __future__ import division, print_function
 
 import math
@@ -67,6 +68,8 @@ def play(samples):
 def playAsync(samples):
     Thread(target=lambda: _play(samples)).start()
 
+# Play the specified .wav file.
+# This only works for wav files that are mono, s16_le, 16000Hz
 def playfile(filename):
     try:
         filesize = os.path.getsize(filename)
@@ -77,6 +80,7 @@ def playfile(filename):
             speaker.setformat(FORMAT)
             speaker.setperiodsize(1000)
             starttime = time.time()
+            f.seek(44)  # skip the wav header
             while True:
                 samples = f.read(2000)
                 if not samples:
@@ -155,6 +159,23 @@ def record(min_duration=1,         # Record at least this many seconds
         end -= 1
     recording = recording[start:end+1]
     return recording
+
+# Write the specified samples in WAV format.
+# The samples must be in the format returned by record():
+# single-channel, s16_le samples at 16000 samples per second
+def savefile(filename, samples):
+    header = array('L',
+                   b'RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00'
+                   b'\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00'
+                   b'\x02\x00\x10\x00data\x00\x00\x00\x00')
+    bytelen = len(samples) * 2
+    header[10] = bytelen
+    header[1] = bytelen + 36
+
+    with open(filename, 'wb') as f:
+        f.write(header)
+        f.write(samples)
+
 
 # if __name__ == '__main__':
 #

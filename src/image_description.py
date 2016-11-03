@@ -5,6 +5,7 @@ import time
 import logging
 import numpy as np
 import cv2
+import audioutils
 
 FLANN_INDEX_KDTREE = 1
 FLANN_INDEX_LSH = 6
@@ -124,14 +125,14 @@ class ImageDescription(object):
             cv2.imwrite("{}/{}".format(dirname, "image.jpg"), image_data)
 
         if audio_data is not None:
-            with open("{}/{}".format(dirname, "audio.raw"), "wb") as audio_file:
-                audio_file.write(audio_data)
+            audioutils.savefile("{}/{}".format(dirname, "audio.wav"),
+                                audio_data)
 
     def audio_filename(self):
         if self.dirname is None:
             return None
         else:
-            return "{}/audio.raw".format(self.dirname)
+            return "{}/audio.wav".format(self.dirname)
 
     def image_filename(self):
         if self.dirname is None:

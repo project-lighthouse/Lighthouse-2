@@ -51,8 +51,8 @@ def get_config():
     # group.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You\'ll need a keyboard to start processing.', dest='autostart', action='store_false')
     # parser.set_defaults(autostart=True)
 
-    group.add_argument('--video-width', help='Video width for capture (default: 640).', default=640, type=int)
-    group.add_argument('--video-height', help='Video height for capture (default: 480).', default=480, type=int)
+    group.add_argument('--video-width', help='Video width for capture (default: 640).', default=1280, type=int)
+    group.add_argument('--video-height', help='Video height for capture (default: 480).', default=960, type=int)
     group.add_argument('--video-fps', help='Video frame rate in FPS. (default: 15).', default=15, type=int)
 
     #

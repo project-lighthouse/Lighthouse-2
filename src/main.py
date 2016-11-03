@@ -16,6 +16,7 @@ from camera import Camera
 from eventloop import EventLoop
 from image_database import ImageDatabase
 from image_description import ImageDescription, TooFewFeaturesException
+from changed_region import get_changed_region
 
 # Define base and sounds folder paths.
 BASE_PATH = os.path.dirname(__file__)
@@ -63,6 +64,12 @@ def pick_only_accurate_matches(matches):
 
 
 def match_item():
+    # Warm up the camera and let it do its white balance during the countdown
+    camera.start()
+
+    # "Three...two...one..."
+    audioutils.playfile(get_sound('countdown.wav'))
+
     matches = []
 
     # Image with the larger number of matches.
@@ -77,7 +84,7 @@ def match_item():
             matches = db.match(image)
         except TooFewFeaturesException:
             logger.info("Too few features.")
-            audioutils.playfile(get_sound('nothing_recognized.raw'))
+            audioutils.playfile(get_sound('nothing_recognized.wav'))
             return
         else:
             # Once we find first accurate match, let's stop trying to find more.
@@ -88,7 +95,7 @@ def match_item():
     accurate_matches = pick_only_accurate_matches(matches)
 
     if len(accurate_matches) == 0:
-        audioutils.playfile(get_sound('noitem.raw'))
+        audioutils.playfile(get_sound('noitem.wav'))
         logger.debug("No accurate matches found (closest match has score %s).",
                      matches[0][0] if len(matches) > 0 else 0)
     elif len(accurate_matches) == 1:
@@ -96,7 +103,7 @@ def match_item():
         logger.debug("Found one match with score '%s'.", score)
         audioutils.playfile(item.audio_filename())
     else:
-        audioutils.playfile(get_sound('multipleitems.raw'))
+        audioutils.playfile(get_sound('multipleitems.wav'))
         logger.debug("Found several matches with the following scores:")
         for (score, match) in accurate_matches:
             logger.debug("Score: %s", score)
@@ -124,47 +131,73 @@ def record_new_item():
     # Make several pictures and choose the frame with the highest number of
     # features. Sometimes camera needs more time to automatically adjust itself
     # for the current light conditions.
-    best_description = None
+    # best_description = None
 
-    audioutils.playAsync(SHUTTER_TONE)
+    # audioutils.playAsync(SHUTTER_TONE)
 
-    for i in range(0, options.matching_n_frames):
-        image = take_picture()
-        try:
-            description = ImageDescription.from_image(image)
+    # for i in range(0, options.matching_n_frames):
+    #     image = take_picture()
+    #     try:
+    #         description = ImageDescription.from_image(image)
 
-            if best_description is None or len(best_description.features) < \
-                    len(description.features):
-                best_description = description
-        except TooFewFeaturesException:
-            logger.info("Too few features in the frame #%s.", i)
+    #         if best_description is None or len(best_description.features) < \
+    #                 len(description.features):
+    #             best_description = description
+    #     except TooFewFeaturesException:
+    #         logger.info("Too few features in the frame #%s.", i)
 
-    if best_description is None:
-        audioutils.playfile(get_sound('nothing_recognized.raw'))
+    # if best_description is None:
+    #     audioutils.playfile(get_sound('nothing_recognized.wav'))
+    #     return
+
+    # Warm up the camera and let it do its white balance while
+    # we give the instructions
+    camera.start()
+
+    audioutils.playfile(get_sound('register_step1.wav'))
+    full_image = take_picture()
+
+    audioutils.playfile(get_sound('register_step2.wav'))
+    background_image = take_picture()
+
+    # FIXME: figure out how this function can fail, and handle those cases
+    # What happens if we pass two identical images, for example?
+    item_image = get_changed_region(full_image, background_image)
+
+    # Check that the returned image isn't too tiny
+    # FIXME: this should probably be a different message than
+    # the one we play when no features are detected
+    if item_image.shape[0] * item_image.shape[1] < 2500:
+        audioutils.playfile(get_sound('nothing_recognized.wav'))
+        return
+
+    try:
+        description = ImageDescription.from_image(item_image)
+    except TooFewFeaturesException:
+        logger.info("Too few features detected")
+        audioutils.playfile(get_sound('nothing_recognized.wav'))
         return
 
     audio = None
     while audio is None:
-        audioutils.playfile(get_sound('afterthetone.raw'))
+        audioutils.playfile(get_sound('afterthetone.wav'))
         audioutils.play(START_RECORDING_TONE)
         audio = audioutils.record()
         audioutils.play(STOP_RECORDING_TONE)
         if len(audio) < 800:  # if we got less than 50ms of sound
             audio = None
-            audioutils.playfile(get_sound('nosound.raw'))
+            audioutils.playfile(get_sound('nosound.wav'))
 
-    item = db.add(image, audio, description)
+    item = db.add(item_image, audio, description)
     logger.info("Added image in %s.", item.dirname)
-    audioutils.playfile(get_sound('registered.raw'))
+    audioutils.playfile(get_sound('registered.wav'))
     audioutils.play(audio)
 
 
 def button_handler(event, pin):
     logger.debug("Pin #%s is activated by '%s' event", pin, event)
 
-    if event == 'press':
-        camera.start()
-    elif event == 'click':
+    if event == 'click':
         match_item()
     elif event == 'longpress':
         record_new_item()
