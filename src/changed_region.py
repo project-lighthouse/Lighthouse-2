@@ -4,29 +4,50 @@ from __future__ import division
 import cv2
 import numpy as np
 
-# An aggressive blur minimizes differences resulting from
-# small camera movement
+# Aggressively downsampling and blurring the two images minimizes
+# differences resulting from small camera movement. It makes the
+# algorithm faster and makes it work much better as well
+SCALE = 8  # how much we scale down by in each dimension
 BLUR_RADIUS = (25, 25)
-SCALE = 10
 
 def get_changed_region(image1, image2):
-    # Shrink, convert to gray and blur the two images
-    # The shrinking and the blur will hopefully prevent us from
-    # picking up small changes that come from camera motion
+    # Shrink the two images. This, along with the blur that follows
+    # will hopefully prevent us from picking up small changes that
+    # come from camera motion
     img1 = cv2.resize(image1, None, fx=1/SCALE, fy=1/SCALE)
     img2 = cv2.resize(image2, None, fx=1/SCALE, fy=1/SCALE)
-    img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
-    img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+    # There is lots of commented out code in this algorithm because
+    # it is useful to uncomment when tuning and testing.
+    # cv2.imwrite('small1.png', img1);
+    # small1 = img1.copy()
+
     img1 = cv2.GaussianBlur(img1, BLUR_RADIUS, 0)
     img2 = cv2.GaussianBlur(img2, BLUR_RADIUS, 0)
+    # cv2.imwrite('blurred.png', img1);
 
-    # Compute difference between images
-    img1 = cv2.absdiff(img1, img2)
+    # We can convert to gray and then take the difference between
+    # the images, but if we do that then we don't see differences where
+    # the foreground and background are different colors that convert to
+    # the same shade of gray.
+    # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+    # img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+    # img1 = cv2.absdiff(img1, img2)
+    # img2 = None
+
+    # Instead of converting to gray we add the differences in the 3 channels
+    b1, g1, r1 = np.split(img1, 3, 2)
+    b2, g2, r2 = np.split(img2, 3, 2)
+    img1 = cv2.absdiff(b1, b2) // 3 \
+           + cv2.absdiff(g1, g2) // 3 \
+           + cv2.absdiff(r1, r2) // 3
     img2 = None
+    # cv2.imwrite('graydiff.png', img1);
 
     # And threshold to convert to a binary image
     _, img1 = cv2.threshold(img1, 0, 255,
                             cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # cv2.imwrite('thresholded.png', img1);
 
     # Find the contours of the thresholded image
     _, contours, _ = cv2.findContours(img1,
@@ -51,6 +72,15 @@ def get_changed_region(image1, image2):
 
     # Find the smallest rotated rectangle that holds the ROI
     minrect = cv2.minAreaRect(roi)
+
+    # Draw various things to show the contours
+    # (x, y, w, h) = cv2.boundingRect(roi)
+    # minboxpts = np.int0(cv2.boxPoints(minrect))
+    # cv2.drawContours(small1, [minboxpts], -1, (0, 0, 255))
+    # cv2.rectangle(small1, (x, y), (x + w, y + h), (255, 0, 0), 2)
+    # cv2.drawContours(small1, [roi], -1, (0,255,0))
+    # cv2.drawContours(small1, [cv2.convexHull(roi)], -1, (0,255,255))
+    # cv2.imwrite('contours.png', small1)
 
     # Rescale the rotated rectangle back to full-size
     boxcenter = (minrect[0][0] * SCALE, minrect[0][1] * SCALE)
@@ -79,29 +109,6 @@ def get_changed_region(image1, image2):
     # And return it
     return changed
 
-    #
-    # This commented-out code is here because it may be useful to
-    # uncomment for debugging or algorithm tuning
-    #
-    # Draw various things to show the contours
-    # (x, y, w, h) = cv2.boundingRect(roi)
-    # minboxpts = np.int0(cv2.boxPoints(minrect))
-    # print('Bounding box:', x, y, w, h)
-    # print('Min area:', minrect)
-    # print('points:', minboxpts)
-    # cv2.drawContours(small1, [minboxpts], -1, (0, 0, 255))
-    # cv2.rectangle(small1, (x, y), (x + w, y + h), (255, 0, 0), 2)
-    # cv2.drawContours(small1, [roi], -1, (0,255,0))
-    # cv2.drawContours(small1, [cv2.convexHull(roi)], -1, (0,255,255))
-    # cv2.imwrite('contours.png', small1)
-    # Produce a cropped region that is unrotated
-    # x *= SCALE
-    # y *= SCALE
-    # w *= SCALE
-    # h *= SCALE
-    # cropped = image1[y:y+h, x:x+w]
-    # cv2.imwrite('cropped.png', cropped)
-
 # if __name__ == "__main__":
 #     import time
 #     from camera import Camera
@@ -124,8 +131,10 @@ def get_changed_region(image1, image2):
 #     changed = get_changed_region(img1, img2)
 #     print("Extracted changed region in:", time.time()-start)
 
-#     cv2.imwrite('original.jpg',img1)
-#     cv2.imwrite('changed.jpg',changed)
+#     cv2.imwrite('image1.png',img1)
+#     cv2.imwrite('image2.png',img2)
+#     cv2.imwrite('changed.png',changed)
 
-# #   get_moving_object(cv2.imread("image1.png"),
-# #      cv2.imread("image2.png"))
+# #    cv2.imwrite('changed.png',
+# #                get_changed_region(cv2.imread("image1.png"),
+# #                                   cv2.imread("image2.png")))
