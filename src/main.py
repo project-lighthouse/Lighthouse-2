@@ -146,7 +146,10 @@ def record_new_item():
     while audio is None:
         audioutils.playfile(get_sound('afterthetone.raw'))
         audioutils.play(START_RECORDING_TONE)
-        audio = audioutils.record()
+        audio = audioutils.record(min_duration=2,
+                                  max_duration=options.max_record_time,
+                                  silence_threshold=options.silence_threshold,
+                                  silence_factor=options.silence_factor)
         audioutils.play(STOP_RECORDING_TONE)
         if len(audio) < 800:  # if we got less than 50ms of sound
             audio = None

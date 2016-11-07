@@ -164,6 +164,16 @@ def get_config():
     group.add_argument('--web-server-root',
                        help='Root directory for debugging web server (default: ~/Lighthouse)',
                        default='~/Lighthouse')
+    group.add_argument('--max-record-time',
+                       help='Max seconds to record item names (default: 5.0)',
+                       default=5.0, type=float)
+    group.add_argument('--silence-threshold',
+                       help='mic levels below this value are treated as silence (default: 150)',
+                       default=150, type=int)
+    group.add_argument('--silence-factor',
+                       help='mic levels below this fraction of the highest levels seen are also treated as silence (default: 0.1)',
+                       default=0.1, type=float)
+
 
     args = parser.parse_args()
 

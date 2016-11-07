@@ -97,20 +97,19 @@ def playfile(filename):
 def record(min_duration=1,         # Record at least this many seconds
            max_duration=8,         # But no more than this many seconds
            max_silence=1,          # Stop recording after silence this long
-           silence_factor=0.1):    # Define "silence" as this fraction of max
+           silence_threshold=DEFAULT_SILENCE_THRESHOLD, # Silence is < this
+           silence_factor=0.1):    # Or, less than this fraction of max
 
     chunk_duration = 1.0/16        # record in batches this many seconds long
     chunk_size = int(SAMPLES_PER_SECOND * chunk_duration)
     elapsed = 0.0                  # how many seconds recorded so far
     elapsed_silence = 0.0          # how much silence at the end
 
-    # Chunks that are quieter than this count as silence
-    # We start with this default value, but may adjust up depending
-    # on how loud the user talks
-    silence_threshold = DEFAULT_SILENCE_THRESHOLD
-
-    # We're keep track of how loud the recording is, and start with an
-    # initial value chosen so that the silence threshold does not decrease
+    # We want to stop recording after a specified amount of silence.
+    # We define silence as anything under silence_threshold, or anything
+    # under silence_factor times the loudest input we've recorded. So we
+    # need to keep track of the loudest input we've heard so far, but we
+    # start with an initial value based on silence_threshold.
     max_amplitude = int(silence_threshold / silence_factor)
 
     mic = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, card=ALSA_MICROPHONE)
