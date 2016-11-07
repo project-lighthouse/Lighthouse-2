@@ -11,7 +11,8 @@ disable=fixme,
         too-many-locals
 
 [TYPECHECK]
-ignored-modules=cv2
+ignored-modules=cv2,
+                alsaaudio
 
 [REPORTS]
 reports=yes
