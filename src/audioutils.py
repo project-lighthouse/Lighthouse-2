@@ -18,7 +18,7 @@ SAMPLES_PER_SECOND = 16000            # at 16000 samples per second
 # For a cheap USB headset, 3000 is better.
 # We need to get this value right in order to have recordings
 # automatically stop on silence.
-DEFAULT_SILENCE_THRESHOLD = 150
+DEFAULT_SILENCE_THRESHOLD = 1000
 
 # Generate a sine wave of the specified frequency and duration with
 # an amplitude that starts high and drops to zero. This does not actually
@@ -91,6 +91,89 @@ def playfile(filename):
         print("IO error: {0}".format(err))
 
 
+#
+# This class accumulates audio samples via its add() method.
+# It computes their average through a sliding window and uses that
+# to subtract any DC component from the samples. It also keeps
+# track of the highest sample it has seen and uses that to define
+# a dynamic silence threshold. It has a method to query to see how
+# much "silence" is at the end of the recording, which is useful to
+# know when to stop recording, and it has a method to return the
+# samples as an array, with silence trimmed off the start and the end.
+#
+class Recording:
+    def __init__(self,
+                 window_size=256,
+                 silence_factor=0.25,
+                 silence_threshold=1000):
+        self.window_size = window_size
+        self.silence_factor = silence_factor
+        self.silence_threshold = silence_threshold
+        self.samples = array('h')
+        self.window = array('h', [0]*self.window_size)
+        self.sum = 0
+
+        self.max = int(self.silence_threshold / self.silence_factor)
+        self.silent_samples = 0
+
+    def add(self, sample):
+        sampleidx = len(self.samples)
+        windowidx = sampleidx % self.window_size
+        self.sum -= self.window[windowidx]
+        self.window[windowidx] = sample
+        self.sum += sample
+
+        if sampleidx >= self.window_size:
+            average = self.sum // self.window_size
+        else:
+            average = self.sum // (sampleidx + 1)
+
+        # the average is the dc component of the signal
+        # subtract it out
+        sample = sample - average
+        if sample > 32767:
+            sample = 32767
+        elif sample < -32768:
+            sample = -32768
+
+        self.samples.append(sample)
+
+        if sample > self.max:
+            self.max = sample
+            self.silence_threshold = sample * self.silence_factor
+
+        if sample < self.silence_threshold:
+            self.silent_samples += 1
+        else:
+            self.silent_samples = 0
+
+    def duration(self):
+        return len(self.samples) / SAMPLES_PER_SECOND
+
+    def trailing_silence(self):
+        return self.silent_samples / SAMPLES_PER_SECOND
+
+    # trim most of the silence from the start and end of the recording
+    # and return the non-silent samples
+    def get_audible_samples(self,
+                            start_margin=SAMPLES_PER_SECOND//16,
+                            end_margin=SAMPLES_PER_SECOND//8):
+        start = 0
+        end = len(self.samples) - 1
+        while start < len(self.samples) and \
+              self.samples[start] < self.silence_threshold:
+            start += 1
+        while end > start and self.samples[end] < self.silence_threshold:
+            end -= 1
+
+        # adjust the start and end to allow a bit of silence
+        # on both sides. Except not if everything is silence
+        if start < end:
+            start = max(0, start - start_margin)
+            end = end + end_margin
+
+        return self.samples[start:end+1]
+
 # Record audio from the microphone, trim off leading and trailing silence
 # and return an array of the audio samples. If no sound is detected at all
 # then the returned array will have a length of zero.
@@ -98,62 +181,57 @@ def record(min_duration=1,         # Record at least this many seconds
            max_duration=8,         # But no more than this many seconds
            max_silence=1,          # Stop recording after silence this long
            silence_threshold=DEFAULT_SILENCE_THRESHOLD, # Silence is < this
-           silence_factor=0.1):    # Or, less than this fraction of max
+           silence_factor=0.25):   # Or, less than this fraction of max
 
     chunk_duration = 1.0/16        # record in batches this many seconds long
     chunk_size = int(SAMPLES_PER_SECOND * chunk_duration)
-    elapsed = 0.0                  # how many seconds recorded so far
-    elapsed_silence = 0.0          # how much silence at the end
-
-    # We want to stop recording after a specified amount of silence.
-    # We define silence as anything under silence_threshold, or anything
-    # under silence_factor times the loudest input we've recorded. So we
-    # need to keep track of the loudest input we've heard so far, but we
-    # start with an initial value based on silence_threshold.
-    max_amplitude = int(silence_threshold / silence_factor)
 
     mic = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, card=ALSA_MICROPHONE)
     mic.setchannels(1)
     mic.setrate(SAMPLES_PER_SECOND)
     mic.setformat(FORMAT)
     mic.setperiodsize(chunk_size)
-    recording = array('h')
 
-    while elapsed < max_duration:
+    recording = Recording(silence_factor=silence_factor,
+                          silence_threshold=silence_threshold)
+
+    while True:
         _, chunk = mic.read()
         chunkarray = array('h', chunk)
-        recording.extend(chunkarray)
+        for sample in chunkarray:
+            recording.add(sample)
 
-        chunk_duration = len(chunkarray) / SAMPLES_PER_SECOND
-        elapsed += chunk_duration
-        chunk_max = max(chunkarray)
+        # How long is the recording now?
+        duration = recording.duration()
 
-        # Keep track of how loud the recording gets
-        if chunk_max > max_amplitude:
-            max_amplitude = chunk_max
-            silence_threshold = max_amplitude * silence_factor
-
-        # If this chunk is relatively quiet compared to the max
-        # then treat it as silence
-        if chunk_max < silence_threshold:
-            elapsed_silence += chunk_duration
-        else:
-            elapsed_silence = 0.0
+        # If we've reached the maximum time, stop recording
+        if duration >= max_duration:
+            break
 
         # If we've recorded for at least the minimum time and have
         # recorded at least the maximum silence, then stop recording.
-        if elapsed >= min_duration and elapsed_silence >= max_silence:
+        if recording.duration() >= min_duration and \
+           recording.trailing_silence() >= max_silence:
             break
 
-    # trim the silence from the start and end of the recording
-    start = 0
-    end = len(recording) - 1
-    while start < len(recording) and recording[start] < silence_threshold:
-        start += 1
-    while end > start and recording[end] < silence_threshold:
-        end -= 1
-    recording = recording[start:end+1]
-    return recording
+    return recording.get_audible_samples()
+
+# Write the specified samples in WAV format.
+# The samples must be in the format returned by record():
+# single-channel, s16_le samples at 16000 samples per second
+def savefile(filename, samples):
+    header = array('I',
+                   b'RIFF\x00\x00\x00\x00WAVEfmt \x10\x00\x00\x00'
+                   b'\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00'
+                   b'\x02\x00\x10\x00data\x00\x00\x00\x00')
+    bytelen = len(samples) * 2
+    header[10] = bytelen
+    header[1] = bytelen + 36
+
+    with open(filename, 'wb') as f:
+        f.write(header)
+        f.write(samples)
+
 
 # if __name__ == '__main__':
 #
