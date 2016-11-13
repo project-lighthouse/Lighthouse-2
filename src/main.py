@@ -39,6 +39,7 @@ busy = False
 # The EventLoop object
 eventloop = None
 
+
 def get_sound(name):
     return os.path.join(SOUNDS_PATH, name)
 
@@ -109,13 +110,18 @@ def match_item():
 
     if options.log_path and len(matches) > 0:
         start = time.time()
-        filename = "{}/{}.jpeg".format(options.log_path,
-                                       time.strftime("%Y%m%dT%H%M%S"))
+
+        # Store both original photo and photo with keypoints.
+        file_id = time.strftime("%Y%m%dT%H%M%S")
+        filename = "{}/{}-match.jpeg".format(options.log_path, file_id)
+        filename_original = "{}/{}.jpeg".format(options.log_path, file_id)
+
         (score, item) = matches[0]
         match_image = item.draw_match(image)
         cv2.putText(match_image, "Score: {}".format(score), (10, 25),
                     cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
         cv2.imwrite(filename, match_image)
+        cv2.imwrite(filename_original, image)
         logger.debug("Match photo saved in %s", time.time() - start)
 
 
