@@ -1,5 +1,6 @@
 [MESSAGES CONTROL]
-disable=fixme,
+disable=duplicate-code,
+        fixme,
         global-statement,
         import-error,
         invalid-name,
