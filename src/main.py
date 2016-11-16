@@ -78,7 +78,6 @@ def match_item(frames):
 
     # We'll take up to this many pictures in order to find match.
     for image in frames:
-
         # FIXME: That's bad, we should check all frames we have before we fail.
         try:
             matches = db.match(image)
@@ -128,6 +127,92 @@ def match_item(frames):
         cv2.imwrite(filename, match_image)
         cv2.imwrite(filename_original, image)
         logger.debug("Match photo saved in %s", time.time() - start)
+
+def capture_moving_objects(expected_number_of_frames):
+    op_start = time.clock()
+    backgroundSubstractor = cv2.createBackgroundSubtractorKNN()
+
+    previous_frame = None
+    captured_frames = []
+    stable_captured_frames = 0
+    surface = options.video_width * options.video_height
+    resample_factor = options.video_resample_factor
+    expected_number_of_frames += options.motion_skip_frames
+
+    # Capture images. We expect that the user is moving the object in front of
+    # the camera. Continue filming until motion stabilizes.
+    while (len(captured_frames) < expected_number_of_frames) or (stable_captured_frames < options.motion_stability_duration):
+        frame = camera.capture()
+        captured_frames.append(frame)
+
+        # We're running in limited memory, make sure that we're not keeping too
+        # many frames in memory.
+        if len(captured_frames) > expected_number_of_frames:
+            captured_frames = captured_frames[1:]
+
+        # Check stability.
+        if not (previous_frame is None):
+            diff = cv2.norm(previous_frame, frame)
+            if diff <= surface * options.motion_stability_factor:
+                # Ok, not too much movement between the last two images, we
+                # might be stabilizing.
+                stable_captured_frames += 1
+            else:
+                stable_captured_frames = 0
+
+        previous_frame = frame
+
+    object_frames = []
+
+    # Now proceed with background substraction.
+    for idx, frame in enumerate(captured_frames):
+        downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
+        downsampled_noisy_mask = cv2.bitwise_and(backgroundSubstractor.apply(downsampled_frame), 255)
+
+        # Experience shows that the background substractor needs a few frames
+        # before it produces anything usable.
+        if idx < options.motion_skip_frames:
+            continue
+
+        # Ok, at this stage, the background substraction should be bootstrapped.
+        # We can make use of `downsampled_noisy_mask`.
+        downsampled_height, downsampled_width = downsampled_noisy_mask.shape[:2]
+
+        # Approximate everything by polygons, removing the smallest polygons.
+        # This has the double effect of:
+        # - getting rid of all contours that are too small;
+        # - restoring missing pixels inside the moving object.
+        _, contours, hierarchy = cv2.findContours(downsampled_noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+        downsampled_bw_mask = numpy.zeros((downsampled_height, downsampled_width), numpy.uint8)
+        is_empty = True
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            fraction = area / (resample_factor * resample_factor * surface)
+            if fraction > options.motion_discard_small_polygons:
+                is_black = False
+                hull = cv2.convexHull(cnt)
+                cv2.fillPoly(downsampled_bw_mask, [hull], 255, 8)
+
+        if is_empty:
+            # This image isn't really useful, let's throw it away.
+            continue
+
+        # Now that all the sophisticated computations are done, upsample the mask
+        # and use it to extract the object, with transparency.
+        bw_mask = cv2.resize(downsampled_bw_mask, (0,0), fx=1/resample_factor, fy=1/resample_factor)
+        mask = cv2.cvtColor(bw_mask, cv2.COLOR_GRAY2RGB)
+        split_1, split_2, split_3 = cv2.split(frame)
+        object_frame = cv2.merge([split_1, split_2, split_3, bw_mask])
+        object_frames.append(object_frame)
+
+    logger.info("After background subtraction, I have %d objects." % len(object_frames))
+
+    op_stop = time.clock()
+    logger.info("Image capture took %d s" % (op_stop - op_start))
+    return object_frames
+
+
 
 
 def capture_everything():
