@@ -40,33 +40,21 @@ def get_config():
     # Default options should generally be fine, additional options are provided to help with testing.
     #
 
-    group = parser.add_argument_group(title="Image acquisition (default values are generally fine)")
+    group = parser.add_argument_group(title="Image acquisition (default values are generally fine).")
 
     group.add_argument('--video-source', help='Use this video source for image capture (default: built-in cam).', default=0)
     group.add_argument('--image-source', help='Use this image instead of a video source. Can be specified multiple times. Incompatible with --video-source.', action='append')
-    # group.add_argument('--dump-raw-video', help='Write raw captured video to this file (default: none).', default=None)
-
-
-    # group.add_argument('--video-acquisition-autostart', help='Start capturing immediately (default).', dest='autostart', action='store_true')
-    # group.add_argument('--no-video-acquisition-autostart', help='Do not start capturing immediately. You\'ll need a keyboard to start processing.', dest='autostart', action='store_false')
-    # parser.set_defaults(autostart=True)
 
     group.add_argument('--video-width', help='Video width for capture (default: 640).', default=640, type=int)
     group.add_argument('--video-height', help='Video height for capture (default: 480).', default=480, type=int)
-    group.add_argument('--video-fps', help='Video frame rate in FPS. (default: 15).', default=15, type=int)
+    group.add_argument('--video-fps', help='Video frame rate in FPS (default: 15).', default=15, type=int)
+    group.add_argument('--video-resample-factor', help='Resampling factor to apply before motion detection (default: .3). Lower values increase speed but decrease quality.', default=.3, type=float)
 
-    #
-    # Video stabilization.
-    # CAVEAT: Highly experimental, you probably shouldn't use it.
-    #
 
-    # group = parser.add_argument_group(title="Video stabilization (CAVEAT: doesn't work yet - you should probably leave this alone)")
-    # group.add_argument('--video-stabilize', help='Stabilize video.', dest='stabilize', action='store_true')
-    # group.add_argument('--no-video-stabilize', help='Do not stabilize video (default).', dest='stabilize', action='store_false')
-    # parser.set_defaults(stabilize=False)
-
-    # parser.add_argument('--dump-stabilized', help='Write stabilized video to this file (default: none)', default=None)
-
+    group.add_argument('--motion-stability-factor', metavar='S', help='Determine when two consecutive frames are considered stable. We check if ||(frame_1, frame_2)|| / surface <= S. (default: .1)', default=.1, type=float)
+    group.add_argument('--motion-stability-duration', help='Number of successive stable frames before we assume that the user has stopped moving the object (default: 5).', default=5, type=int)
+    group.add_argument('--motion-skip-frames', help='Number of frames we should skip to let background extraction initialize itself properly (default: 20).', default=20, type=int)
+    group.add_argument('--motion-discard-small-polygons', metavar='MIN_FRACTION', help='Discard polygons whose pixel surface is smaller than MIN_FRACTION (default: .1).', default=.1, type=float)
 
     #
     # Customizing how images are extracted from videos.
@@ -111,7 +99,7 @@ def get_config():
                        default='brute-force')
     group.add_argument('--matching-ratio-test-k', help='Ratio test coefficient (default: 0.8)', default=0.8, type=float)
     group.add_argument('--matching-histogram-weight', help='How much weight to give to histogram correlation when matching images', default=5.0, type=float)
-    group.add_argument('--matching-n-frames', help='How many frames to capture for matching (default: 3)', default=3,
+    group.add_argument('--matching-n-frames', help='How many frames to capture for matching (default: 10)', default=10,
                        type=int)
     group.add_argument('--matching-orb-n-features',
                        help='Number of features to extract used in ORB detector (default: 1000)', default=1000, type=int)
@@ -179,6 +167,11 @@ def get_config():
 
     #
     # Ensure consistency.
+
+    if args.video_resample_factor <= 0:
+        args.video_resample_factor = .01
+    elif args.video_resample_factor > 1:
+        args.video_resample_factor = 1
     #
     # if args.acquisition_buffer_init <= 0:
     #     args.acquisition_buffer_init = .01
