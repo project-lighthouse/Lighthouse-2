@@ -183,9 +183,10 @@ def main():
     with open(args.config_path) as config_file:
         for line in config_file:
             key, value = line.partition("=")[::2]
-            key = key.strip()
+
             # Ignore empty lines.
-            if not key:
+            key = key.strip()
+            if key:
                 config[key] = value.strip()
 
     logger.info('Current environment variables: %s', config)

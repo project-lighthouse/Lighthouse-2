@@ -109,12 +109,12 @@ def get_config():
                        choices=['orb', 'akaze', 'surf'], default='orb')
     group.add_argument('--matching-matcher', help='Matcher to use (default: brute-force)', choices=['brute-force', 'flann'],
                        default='brute-force')
-    group.add_argument('--matching-ratio-test-k', help='Ratio test coefficient (default: 0.75)', default=0.75, type=float)
+    group.add_argument('--matching-ratio-test-k', help='Ratio test coefficient (default: 0.8)', default=0.8, type=float)
     group.add_argument('--matching-histogram-weight', help='How much weight to give to histogram correlation when matching images', default=5.0, type=float)
     group.add_argument('--matching-n-frames', help='How many frames to capture for matching (default: 3)', default=3,
                        type=int)
     group.add_argument('--matching-orb-n-features',
-                       help='Number of features to extract used in ORB detector (default: 500)', default=500, type=int)
+                       help='Number of features to extract used in ORB detector (default: 1000)', default=1000, type=int)
     group.add_argument('--matching-akaze-n-channels', help='Number of channels used in AKAZE detector (default: 3)',
                        choices=[1, 2, 3], default=3, type=int)
     group.add_argument('--matching-surf-threshold',
