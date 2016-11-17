@@ -203,11 +203,11 @@ class ImageDescription(object):
     # ones that were produced during matching.
     def draw_match(self, scene):
         item = cv2.imread(self.image_filename())
-        gray_item = cv2.cvtColor(item, cv2.COLOR_BGR2GRAY)
+        gray_item = cv2.cvtColor(item, cv2.COLOR_BGRA2GRAY)
         item_keypoints, item_features = feature_extractor.detectAndCompute(
             gray_item, None)
 
-        gray_scene = cv2.cvtColor(scene, cv2.COLOR_BGR2GRAY)
+        gray_scene = cv2.cvtColor(scene, cv2.COLOR_BGRA2GRAY)
         scene_keypoints, scene_features = feature_extractor.detectAndCompute(
             gray_scene, None)
 
