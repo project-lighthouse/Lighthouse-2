@@ -29,6 +29,8 @@ STOP_RECORDING_TONE = audioutils.makebeep(400, .2)
 CHIRP = audioutils.makebeep(600, .05)
 SHUTTER_TONE = None
 
+DEBUG = False
+
 db = None
 camera = None
 options = config.get_config()
@@ -72,14 +74,14 @@ def pick_only_accurate_matches(matches):
     return retval
 
 
-def match_item():
+def match_item(frames):
     matches = []
 
     # Image with the larger number of matches.
     image = None
 
     # We'll take up to this many pictures in order to find match.
-    for image in capture_moving_objects(options.matching_n_frames):
+    for image in frames:
 
         # FIXME: That's bad, we should check all frames we have before we fail.
         try:
@@ -131,7 +133,102 @@ def match_item():
         cv2.imwrite(filename_original, image)
         logger.debug("Match photo saved in %s", time.time() - start)
 
-def capture_moving_objects(expected_number_of_frames):
+
+def capture_everything():
+    """Image acquisition strategy: just take a bunch of pictures, don't attempt to remove
+    the background."""
+
+    captured_frames = []
+    while len(captured_frames) < options.matching_n_frames:
+        captured_frames.append(camera.capture())
+
+    audioutils.playAsync(SHUTTER_TONE)
+
+    return captured_frames
+
+_background_for_capture_by_unhiding = None
+def capture_by_unhiding():
+    """Image acquisition strategy: on the first call, take a picture, assume it's
+    the background. On a second call, wait until the image has stabilized,
+    then capture a second image, assume it's the image with the object. Compute
+    the difference between both images, use it to remove the background."""
+
+    global _background_for_capture_by_unhiding
+    if _background_for_capture_by_unhiding == None:
+        # First, capture the background.
+        _background_for_capture_by_unhiding = camera.capture()
+        audioutils.playAsync(SHUTTER_TONE)
+
+        # Continue after a moment
+        return 2 # Seconds.
+
+    # At this stage, we have waited a few seconds, let's resume capture.
+    audioutils.play(CHIRP)
+    audioutils.play(CHIRP)
+
+    background = _background_for_capture_by_unhiding
+    _background_for_capture_by_unhiding = None
+    stable_captured_frames = 0
+    surface = options.video_width * options.video_height
+
+    previous_frame = background
+    frame = None
+    while stable_captured_frames < options.motion_stability_duration:
+        frame = camera.capture()
+        diff = cv2.norm(previous_frame, frame)
+        previous_frame = frame
+
+        if diff <= surface * options.motion_stability_factor:
+            # Ok, not too much movement between the last two images, we
+            # might be stabilizing.
+            stable_captured_frames += 1
+        else:
+            stable_captured_frames = 0
+
+    # At this stage, `background` should contain the background
+    # and `frame` should contain the background + the object.
+    # Let's compute a difference.
+    noisy_mask = cv2.bitwise_and(cv2.bitwise_not(background), frame)
+
+    # Get rid of noise in the mask.
+    noisy_mask = cv2.cvtColor(noisy_mask, cv2.COLOR_RGB2GRAY)
+    _, contours, hierarchy = cv2.findContours(noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    height, width = noisy_mask.shape[:2]
+    surface = height * width
+    denoised_bw_mask = numpy.zeros((height, width), numpy.uint8)
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        fraction = area / surface
+        if fraction > options.motion_discard_small_polygons:
+            hull = cv2.convexHull(cnt)
+            cv2.fillPoly(denoised_bw_mask, [hull], 255, 8)
+
+    # Extract object from background.
+    split_1, split_2, split_3 = cv2.split(frame)
+    object_frame = cv2.merge([split_1, split_2, split_3, denoised_bw_mask])
+
+    audioutils.playAsync(SHUTTER_TONE)
+
+    global DEBUG
+    if DEBUG: # Useful for debugging.
+        cv2.imwrite("/tmp/background.png", background)
+        cv2.imwrite("/tmp/frame.png", frame)
+        cv2.imwrite("/tmp/object.png", object_frame)
+        cv2.imwrite("/tmp/noisy_mask.png", noisy_mask)
+        cv2.imwrite("/tmp/denoised_bw_mask.png", denoised_bw_mask)
+
+    return [object_frame]
+
+
+
+def capture_by_substracting():
+    """Image acquisition strategy: expect the user to move the object in front
+    of the camera. Once the object has stopped moving, use background
+    substraction to remove the background."""
+
+    global DEBUG
+
     op_start = time.clock()
     backgroundSubstractor = cv2.createBackgroundSubtractorKNN()
 
@@ -140,7 +237,7 @@ def capture_moving_objects(expected_number_of_frames):
     stable_captured_frames = 0
     surface = options.video_width * options.video_height
     resample_factor = options.video_resample_factor
-    expected_number_of_frames += options.motion_skip_frames
+    expected_number_of_frames = options.motion_skip_frames + options.matching_n_frames
 
     # Capture images. We expect that the user is moving the object in front of
     # the camera. Continue filming until motion stabilizes.
@@ -165,12 +262,15 @@ def capture_moving_objects(expected_number_of_frames):
 
         previous_frame = frame
 
+    audioutils.playAsync(SHUTTER_TONE)
+
     object_frames = []
 
     # Now proceed with background substraction.
     for idx, frame in enumerate(captured_frames):
         downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
-        downsampled_noisy_mask = cv2.bitwise_and(backgroundSubstractor.apply(downsampled_frame), 255)
+        downsampled_substraction = backgroundSubstractor.apply(downsampled_frame)
+        ret, downsampled_noisy_mask = cv2.threshold(downsampled_substraction, 128, 255, cv2.THRESH_BINARY)
 
         # Experience shows that the background substractor needs a few frames
         # before it produces anything usable.
@@ -193,12 +293,17 @@ def capture_moving_objects(expected_number_of_frames):
             area = cv2.contourArea(cnt)
             fraction = area / (resample_factor * resample_factor * surface)
             if fraction > options.motion_discard_small_polygons:
-                is_black = False
+                is_empty = False
                 hull = cv2.convexHull(cnt)
                 cv2.fillPoly(downsampled_bw_mask, [hull], 255, 8)
 
         if is_empty:
             # This image isn't really useful, let's throw it away.
+            logger.info("Can't find any moving object on frame %d" % idx)
+            if DEBUG: # Useful for debugging
+                cv2.imwrite("/tmp/frame-%d.png" % idx, downsampled_frame)
+                cv2.imwrite("/tmp/noisy-mask-%d.png" % idx, downsampled_noisy_mask)
+                cv2.imwrite("/tmp/subs-%d.png" % idx, downsampled_substraction)
             continue
 
         # Now that all the sophisticated computations are done, upsample the mask
@@ -209,6 +314,9 @@ def capture_moving_objects(expected_number_of_frames):
         object_frame = cv2.merge([split_1, split_2, split_3, bw_mask])
         object_frames.append(object_frame)
 
+        if DEBUG:
+            cv2.imwrite("/tmp/object-%d.png" % idx, object_frame)
+
     logger.info("After background subtraction, I have %d objects." % len(object_frames))
 
     op_stop = time.clock()
@@ -218,18 +326,13 @@ def capture_moving_objects(expected_number_of_frames):
 
 
 
-def record_new_item():
+def record_new_item(frames):
     # Make several pictures and choose the frame with the highest number of
     # features. Sometimes camera needs more time to automatically adjust itself
     # for the current light conditions.
     best_description = None
 
-    audioutils.playAsync(SHUTTER_TONE)
-
-    # Take a few pictures, attempt to remove background and noise.
-    images = capture_moving_objects(options.matching_n_frames)
-
-    for image in images:
+    for image in frames:
         try:
             description = ImageDescription.from_image(image)
 
@@ -267,6 +370,31 @@ def ready():
     busy = False
     audioutils.play(CHIRP)
 
+def capture_frames_then(k):
+    global busy
+    global capture_strategy
+    busy = True
+
+    frames = None
+    if options.motion_background_removal_strategy == "everything":
+        frames = capture_everything()
+    elif options.motion_background_removal_strategy == "unhiding":
+        frames = capture_by_unhiding()
+    elif options.motion_background_removal_strategy == "substracting":
+        frames = capture_by_substracting()
+    else:
+        logger.exception("Unexpected capture strategy %s" % capture_strategy)
+        raise Exception
+
+    if isinstance(frames, list):
+        # `frames` actually contains frames
+        k(frames)
+        eventloop.later(ready, 0.5)
+    else:
+        # `frames` is actually a delay before we should
+        # try again
+        eventloop.later(lambda: capture_frames_then(k), frames)
+
 def button_handler(event, pin):
     global busy
 
@@ -280,14 +408,9 @@ def button_handler(event, pin):
     if event == 'press':
         camera.start()
     elif event == 'click':
-        busy = True
-        match_item()
-        # run this on the event loop so we ignore any events queueed up
-        eventloop.later(ready, 0.5)
+        capture_frames_then(match_item)
     elif event == 'longpress':
-        busy = True
-        record_new_item()
-        eventloop.later(ready, 0.5)
+        capture_frames_then(record_new_item)
 
 
 def keyboard_handler(key=None):
@@ -298,12 +421,9 @@ def keyboard_handler(key=None):
         return
 
     if key == 'R' or key == 'r':
-        busy = True
-        record_new_item()
-        eventloop.later(ready, 0.5)
+        capture_frames_then(record_new_item)
     elif key == 'M' or key == 'm':
-        match_item()
-        eventloop.later(ready, 0.5)
+        capture_frames_then(match_item)
     elif key == 'Q' or key == 'q':
         sys.exit(0)
     else:
