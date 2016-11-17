@@ -268,7 +268,7 @@ def capture_by_substracting():
     for idx, frame in enumerate(captured_frames):
         downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
         downsampled_substraction = backgroundSubstractor.apply(downsampled_frame)
-        ret, downsampled_noisy_mask = cv2.threshold(downsampled_substraction, 128, 255, cv2.THRESH_BINARY)
+        ret, downsampled_noisy_mask = cv2.threshold(downsampled_substraction, 200, 255, cv2.THRESH_BINARY)
 
         # Experience shows that the background substractor needs a few frames
         # before it produces anything usable.
