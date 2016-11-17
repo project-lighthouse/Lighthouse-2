@@ -98,8 +98,9 @@ class ImageDescription(object):
     def from_image(image_data):
         # Extract all possible keypoints from the frame.
         grayscale = cv2.cvtColor(image_data, cv2.COLOR_BGR2GRAY)
+        mask = cv2.split(image_data)[3]
         (keypoints, features) = feature_extractor.detectAndCompute(grayscale,
-                                                                   None)
+                                                                   mask)
 
         if len(keypoints) < minimum_keypoints:
             raise TooFewFeaturesException()
@@ -121,7 +122,7 @@ class ImageDescription(object):
         np.savez(datafile, features=self.features, histogram=self.histogram)
 
         if image_data is not None:
-            cv2.imwrite("{}/{}".format(dirname, "image.jpg"), image_data)
+            cv2.imwrite("{}/{}".format(dirname, "image.png"), image_data)
 
         if audio_data is not None:
             with open("{}/{}".format(dirname, "audio.raw"), "wb") as audio_file:
@@ -137,7 +138,7 @@ class ImageDescription(object):
         if self.dirname is None:
             return None
         else:
-            return "{}/image.jpg".format(self.dirname)
+            return "{}/image.png".format(self.dirname)
 
     # Match one image description against another.
     # Call this method on the newly captured image and pass the description of a

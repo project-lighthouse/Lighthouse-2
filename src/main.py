@@ -52,10 +52,6 @@ def take_picture():
     audioutils.playAsync(SHUTTER_TONE)
     return camera.capture()
 
-def minus_background(image, background):
-    delta = cv2.compare(image, background, cv2.CMP_NE)
-    return cv2.bitwise_and(image, cv2.bitwise_not(delta))
-
 def pick_only_accurate_matches(matches):
     # Loop though the scores until we find one that is bigger than the
     # threshold, or significantly bigger than the best score and then return
@@ -140,7 +136,9 @@ def capture_everything():
 
     captured_frames = []
     while len(captured_frames) < options.matching_n_frames:
-        captured_frames.append(camera.capture())
+        frame = camera.capture()
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
+        captured_frames.append(frame)
 
     audioutils.playAsync(SHUTTER_TONE)
 
