@@ -251,14 +251,13 @@ def capture_by_unhiding():
     if _background_for_capture_by_unhiding is None:
         # First, capture the background.
         _background_for_capture_by_unhiding = camera.capture()
-        audioutils.playAsync(SHUTTER_TONE)
+#        audioutils.playAsync(SHUTTER_TONE)
 
+        audioutils.playfile(get_sound('show_me.raw'))
         # Continue after a moment
         return 2 # Seconds.
 
     # At this stage, we have waited a few seconds, let's resume capture.
-    audioutils.play(CHIRP)
-    audioutils.play(CHIRP)
 
     background = _background_for_capture_by_unhiding
     _background_for_capture_by_unhiding = None
@@ -362,6 +361,8 @@ def capture_by_substracting():
     surface = options.video_width * options.video_height
     resample_factor = options.video_resample_factor
     expected_number_of_frames = options.motion_skip_frames + options.matching_n_frames
+
+    audioutils.playfile(get_sound('shake_it.raw'))
 
     # Capture images. We expect that the user is moving the object in front of
     # the camera. Continue filming until motion stabilizes.
