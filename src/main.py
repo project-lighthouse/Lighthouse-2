@@ -374,11 +374,11 @@ def capture_frames_then(k):
     busy = True
 
     frames = None
-    if options.motion_background_removal_strategy == "everything":
+    if options.motion_background_removal_strategy == "keep-everything":
         frames = capture_everything()
-    elif options.motion_background_removal_strategy == "unhiding":
+    elif options.motion_background_removal_strategy == "now-you-see-me":
         frames = capture_by_unhiding()
-    elif options.motion_background_removal_strategy == "substracting":
+    elif options.motion_background_removal_strategy == "moving-object":
         frames = capture_by_substracting()
     else:
         logger.exception("Unexpected capture strategy %s" % capture_strategy)
