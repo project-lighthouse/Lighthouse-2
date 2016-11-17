@@ -101,7 +101,7 @@ def playfile(filename):
 # know when to stop recording, and it has a method to return the
 # samples as an array, with silence trimmed off the start and the end.
 #
-class Recording(object):
+class Recording:
     def __init__(self,
                  window_size=256,
                  silence_factor=0.25,
