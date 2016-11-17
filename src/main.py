@@ -141,7 +141,9 @@ def capture_moving_objects(expected_number_of_frames):
 
     # Capture images. We expect that the user is moving the object in front of
     # the camera. Continue filming until motion stabilizes.
-    while (len(captured_frames) < expected_number_of_frames) or (stable_captured_frames < options.motion_stability_duration):
+    while (len(captured_frames) < expected_number_of_frames
+           or
+           stable_captured_frames < options.motion_stability_duration):
         frame = camera.capture()
         captured_frames.append(frame)
 
@@ -151,7 +153,7 @@ def capture_moving_objects(expected_number_of_frames):
             captured_frames = captured_frames[1:]
 
         # Check stability.
-        if not (previous_frame is None):
+        if not previous_frame is None:
             diff = cv2.norm(previous_frame, frame)
             if diff <= surface * options.motion_stability_factor:
                 # Ok, not too much movement between the last two images, we
@@ -166,8 +168,11 @@ def capture_moving_objects(expected_number_of_frames):
 
     # Now proceed with background substraction.
     for idx, frame in enumerate(captured_frames):
-        downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
-        downsampled_noisy_mask = cv2.bitwise_and(backgroundSubstractor.apply(downsampled_frame), 255)
+        downsampled_frame = cv2.resize(frame, (0, 0),
+                                       fx=resample_factor,
+                                       fy=resample_factor)
+        downsampled_noisy_mask = cv2.bitwise_and(
+            backgroundSubstractor.apply(downsampled_frame), 255)
 
         # Experience shows that the background substractor needs a few frames
         # before it produces anything usable.
@@ -182,15 +187,19 @@ def capture_moving_objects(expected_number_of_frames):
         # This has the double effect of:
         # - getting rid of all contours that are too small;
         # - restoring missing pixels inside the moving object.
-        _, contours, hierarchy = cv2.findContours(downsampled_noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        _, contours, _ = cv2.findContours(downsampled_noisy_mask,
+                                          cv2.RETR_EXTERNAL,
+                                          cv2.CHAIN_APPROX_NONE)
 
-        downsampled_bw_mask = numpy.zeros((downsampled_height, downsampled_width), numpy.uint8)
+        downsampled_bw_mask = numpy.zeros((downsampled_height,
+                                           downsampled_width),
+                                          numpy.uint8)
         is_empty = True
         for cnt in contours:
             area = cv2.contourArea(cnt)
             fraction = area / (resample_factor * resample_factor * surface)
             if fraction > options.motion_discard_small_polygons:
-                is_black = False
+                is_empty = False
                 hull = cv2.convexHull(cnt)
                 cv2.fillPoly(downsampled_bw_mask, [hull], 255, 8)
 
@@ -200,16 +209,18 @@ def capture_moving_objects(expected_number_of_frames):
 
         # Now that all the sophisticated computations are done, upsample the mask
         # and use it to extract the object, with transparency.
-        bw_mask = cv2.resize(downsampled_bw_mask, (0,0), fx=1/resample_factor, fy=1/resample_factor)
-        mask = cv2.cvtColor(bw_mask, cv2.COLOR_GRAY2RGB)
+        bw_mask = cv2.resize(downsampled_bw_mask, (0, 0),
+                             fx=1/resample_factor,
+                             fy=1/resample_factor)
         split_1, split_2, split_3 = cv2.split(frame)
         object_frame = cv2.merge([split_1, split_2, split_3, bw_mask])
         object_frames.append(object_frame)
 
-    logger.info("After background subtraction, I have %d objects." % len(object_frames))
+    logger.info("After background subtraction, I have %d objects.",
+                len(object_frames))
 
     op_stop = time.clock()
-    logger.info("Image capture took %d s" % (op_stop - op_start))
+    logger.info("Image capture took %d s", (op_stop - op_start))
     return object_frames
 
 
@@ -237,7 +248,7 @@ def capture_by_unhiding():
     the difference between both images, use it to remove the background."""
 
     global _background_for_capture_by_unhiding
-    if _background_for_capture_by_unhiding == None:
+    if _background_for_capture_by_unhiding is None:
         # First, capture the background.
         _background_for_capture_by_unhiding = camera.capture()
         audioutils.playAsync(SHUTTER_TONE)
@@ -275,22 +286,40 @@ def capture_by_unhiding():
     # We start by resampling and blurring to remove as many small differences
     # as possible.
     resample_factor = options.video_resample_factor
-    downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
-    downsampled_frame = cv2.GaussianBlur(downsampled_frame, (options.motion_blur_radius, options.motion_blur_radius), 0)
-    downsampled_frame = cv2.cvtColor(downsampled_frame, cv2.COLOR_BGR2GRAY)
-    downsampled_background = cv2.resize(background, (0,0), fx=resample_factor, fy=resample_factor)
-    downsampled_background = cv2.GaussianBlur(downsampled_background, (options.motion_blur_radius, options.motion_blur_radius), 0)
-    downsampled_background = cv2.cvtColor(downsampled_background, cv2.COLOR_BGR2GRAY)
+    downsampled_frame = cv2.resize(frame, (0, 0),
+                                   fx=resample_factor,
+                                   fy=resample_factor)
+    downsampled_frame = cv2.GaussianBlur(downsampled_frame,
+                                         (options.motion_blur_radius,
+                                          options.motion_blur_radius),
+                                         0)
+    downsampled_frame = cv2.cvtColor(downsampled_frame,
+                                     cv2.COLOR_BGR2GRAY)
+    downsampled_background = cv2.resize(background, (0, 0),
+                                        fx=resample_factor,
+                                        fy=resample_factor)
+    downsampled_background = cv2.GaussianBlur(downsampled_background,
+                                              (options.motion_blur_radius,
+                                               options.motion_blur_radius),
+                                              0)
+    downsampled_background = cv2.cvtColor(downsampled_background,
+                                          cv2.COLOR_BGR2GRAY)
 
-    downsampled_noisy_mask = cv2.absdiff(downsampled_frame, downsampled_background)
-    _, downsampled_noisy_mask = cv2.threshold(downsampled_noisy_mask, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
+    downsampled_noisy_mask = cv2.absdiff(downsampled_frame,
+                                         downsampled_background)
+    _, downsampled_noisy_mask = cv2.threshold(downsampled_noisy_mask, 0, 255,
+                                              (cv2.THRESH_BINARY_INV |
+                                               cv2.THRESH_OTSU))
 
     # Get rid of noise in the mask.
-    _, contours, _ = cv2.findContours(downsampled_noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    _, contours, _ = cv2.findContours(downsampled_noisy_mask, cv2.RETR_EXTERNAL,
+                                      cv2.CHAIN_APPROX_NONE)
 
     downsampled_height, downsampled_width = downsampled_noisy_mask.shape[:2]
     surface = downsampled_height * downsampled_width
-    downsampled_denoised_bw_mask = numpy.zeros((downsampled_height, downsampled_width), numpy.uint8)
+    downsampled_denoised_bw_mask = numpy.zeros((downsampled_height,
+                                                downsampled_width),
+                                               numpy.uint8)
     for cnt in contours:
         area = cv2.contourArea(cnt)
         fraction = area / (resample_factor * resample_factor * surface)
@@ -299,15 +328,15 @@ def capture_by_unhiding():
             cv2.fillPoly(downsampled_denoised_bw_mask, [hull], 255, 8)
 
     # Extract object from background.
-    denoised_bw_mask = cv2.resize(downsampled_denoised_bw_mask, (0, 0), fx=1/resample_factor, fy=1/resample_factor)
-    denoised_mask = cv2.cvtColor(denoised_bw_mask, cv2.COLOR_GRAY2RGB)
+    denoised_bw_mask = cv2.resize(downsampled_denoised_bw_mask, (0, 0),
+                                  fx=1/resample_factor,
+                                  fy=1/resample_factor)
 
     split_1, split_2, split_3 = cv2.split(frame)
     object_frame = cv2.merge([split_1, split_2, split_3, denoised_bw_mask])
 
     audioutils.playAsync(SHUTTER_TONE)
 
-    global DEBUG
     if DEBUG: # Useful for debugging.
         cv2.imwrite("/tmp/background.png", background)
         cv2.imwrite("/tmp/frame.png", frame)
@@ -324,8 +353,6 @@ def capture_by_substracting():
     of the camera. Once the object has stopped moving, use background
     substraction to remove the background."""
 
-    global DEBUG
-
     op_start = time.clock()
     backgroundSubstractor = cv2.createBackgroundSubtractorKNN()
 
@@ -338,7 +365,9 @@ def capture_by_substracting():
 
     # Capture images. We expect that the user is moving the object in front of
     # the camera. Continue filming until motion stabilizes.
-    while (len(captured_frames) < expected_number_of_frames) or (stable_captured_frames < options.motion_stability_duration):
+    while (len(captured_frames) < expected_number_of_frames
+           or
+           stable_captured_frames < options.motion_stability_duration):
         frame = camera.capture()
         captured_frames.append(frame)
 
@@ -348,7 +377,7 @@ def capture_by_substracting():
             captured_frames = captured_frames[1:]
 
         # Check stability.
-        if not (previous_frame is None):
+        if not previous_frame is None:
             diff = cv2.norm(previous_frame, frame)
             if diff <= surface * options.motion_stability_factor:
                 # Ok, not too much movement between the last two images, we
@@ -365,9 +394,12 @@ def capture_by_substracting():
 
     # Now proceed with background substraction.
     for idx, frame in enumerate(captured_frames):
-        downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
+        downsampled_frame = cv2.resize(frame, (0, 0),
+                                       fx=resample_factor,
+                                       fy=resample_factor)
         downsampled_substraction = backgroundSubstractor.apply(downsampled_frame)
-        ret, downsampled_noisy_mask = cv2.threshold(downsampled_substraction, 200, 255, cv2.THRESH_BINARY)
+        _, downsampled_noisy_mask = cv2.threshold(downsampled_substraction,
+                                                  200, 255, cv2.THRESH_BINARY)
 
         # Experience shows that the background substractor needs a few frames
         # before it produces anything usable.
@@ -382,9 +414,13 @@ def capture_by_substracting():
         # This has the double effect of:
         # - getting rid of all contours that are too small;
         # - restoring missing pixels inside the moving object.
-        _, contours, hierarchy = cv2.findContours(downsampled_noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        _, contours, _ = cv2.findContours(downsampled_noisy_mask,
+                                          cv2.RETR_EXTERNAL,
+                                          cv2.CHAIN_APPROX_NONE)
 
-        downsampled_bw_mask = numpy.zeros((downsampled_height, downsampled_width), numpy.uint8)
+        downsampled_bw_mask = numpy.zeros((downsampled_height,
+                                           downsampled_width),
+                                          numpy.uint8)
         is_empty = True
         for cnt in contours:
             area = cv2.contourArea(cnt)
@@ -396,17 +432,14 @@ def capture_by_substracting():
 
         if is_empty:
             # This image isn't really useful, let's throw it away.
-            logger.info("Can't find any moving object on frame %d" % idx)
-            if DEBUG: # Useful for debugging
-                cv2.imwrite("/tmp/frame-%d.png" % idx, downsampled_frame)
-                cv2.imwrite("/tmp/noisy-mask-%d.png" % idx, downsampled_noisy_mask)
-                cv2.imwrite("/tmp/subs-%d.png" % idx, downsampled_substraction)
+            logger.info("Can't find any moving object on frame %d", idx)
             continue
 
         # Now that all the sophisticated computations are done, upsample the mask
         # and use it to extract the object, with transparency.
-        bw_mask = cv2.resize(downsampled_bw_mask, (0,0), fx=1/resample_factor, fy=1/resample_factor)
-        mask = cv2.cvtColor(bw_mask, cv2.COLOR_GRAY2RGB)
+        bw_mask = cv2.resize(downsampled_bw_mask, (0, 0),
+                             fx=1/resample_factor,
+                             fy=1/resample_factor)
         split_1, split_2, split_3 = cv2.split(frame)
         object_frame = cv2.merge([split_1, split_2, split_3, bw_mask])
         object_frames.append(object_frame)
@@ -414,10 +447,12 @@ def capture_by_substracting():
         if DEBUG:
             cv2.imwrite("/tmp/object-%d.png" % idx, object_frame)
 
-    logger.info("After background subtraction, I have %d objects." % len(object_frames))
+    logger.info("After background subtraction, I have %d objects.",
+                len(object_frames))
 
     op_stop = time.clock()
-    logger.info("Image capture took %d s" % (op_stop - op_start))
+    logger.info("Image capture took %d s",
+                (op_stop - op_start))
     return object_frames
 
 
@@ -428,6 +463,7 @@ def record_new_item(frames):
     # features. Sometimes camera needs more time to automatically adjust itself
     # for the current light conditions.
     best_description = None
+    best_image = None
 
     for image in frames:
         try:
@@ -436,6 +472,7 @@ def record_new_item(frames):
             if best_description is None or len(best_description.features) < \
                     len(description.features):
                 best_description = description
+                best_image = image
         except TooFewFeaturesException:
             logger.info("Too few features in the frame.")
 
@@ -456,7 +493,7 @@ def record_new_item(frames):
             audio = None
             audioutils.playfile(get_sound('nosound.raw'))
 
-    item = db.add(image, audio, description)
+    item = db.add(best_image, audio, best_description)
     logger.info("Added image in %s.", item.dirname)
     audioutils.playfile(get_sound('registered.raw'))
     audioutils.play(audio)
@@ -469,7 +506,6 @@ def ready():
 
 def capture_frames_then(k):
     global busy
-    global capture_strategy
     busy = True
 
     frames = None
@@ -480,7 +516,8 @@ def capture_frames_then(k):
     elif options.motion_background_removal_strategy == "moving-object":
         frames = capture_by_substracting()
     else:
-        logger.exception("Unexpected capture strategy %s" % capture_strategy)
+        logger.exception("Unexpected capture strategy %s",
+                         options.motion_background_removal_strategy)
         raise Exception
 
     if isinstance(frames, list):
@@ -493,8 +530,6 @@ def capture_frames_then(k):
         eventloop.later(lambda: capture_frames_then(k), frames)
 
 def button_handler(event, pin):
-    global busy
-
     # If we're still processing some other event, ignore this one
     if busy:
         logger.debug('ignoring event %s', event)
@@ -511,8 +546,6 @@ def button_handler(event, pin):
 
 
 def keyboard_handler(key=None):
-    global busy
-
     if busy:
         logger.debug('ignoring key %s', key)
         return
