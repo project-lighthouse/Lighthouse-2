@@ -39,6 +39,7 @@ def get_config():
     group.add_argument('--motion-background-removal-strategy', help='Strategy for removing the background (default: "keep-everything"). Can be "keep-everything" (don\'t remove the background), "now-you-see-me" (take a picture without the object then with the object) or "moving-object" (move the object in front of the camera for a second).', default='keep-everything', choices=['keep-everything', 'now-you-see-me', 'moving-object'])
     group.add_argument('--motion-stability-factor', metavar='S', help='Determine when two consecutive frames are considered stable. We check if ||(frame_1, frame_2)|| / surface <= S. (default: .1)', default=.1, type=float)
     group.add_argument('--motion-stability-duration', help='Number of successive stable frames before we assume that the user has stopped moving the object (default: 5).', default=5, type=int)
+    group.add_argument('--motion-blur-radius', default=25, type=int)
     group.add_argument('--motion-skip-frames', help='Number of frames we should skip to let background extraction initialize itself properly (default: 20).', default=20, type=int)
     group.add_argument('--motion-discard-small-polygons', metavar='MIN_FRACTION', help='Discard polygons whose pixel surface is smaller than MIN_FRACTION (default: .1).', default=.1, type=float)
 

@@ -137,7 +137,7 @@ def capture_everything():
     captured_frames = []
     while len(captured_frames) < options.matching_n_frames:
         frame = camera.capture()
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2BGRA)
         captured_frames.append(frame)
 
     audioutils.playAsync(SHUTTER_TONE)
@@ -186,23 +186,37 @@ def capture_by_unhiding():
     # At this stage, `background` should contain the background
     # and `frame` should contain the background + the object.
     # Let's compute a difference.
-    noisy_mask = cv2.bitwise_and(cv2.bitwise_not(background), frame)
+
+    # We start by resampling and blurring to remove as many small differences
+    # as possible.
+    resample_factor = options.video_resample_factor
+    downsampled_frame = cv2.resize(frame, (0,0), fx=resample_factor, fy=resample_factor)
+    downsampled_frame = cv2.GaussianBlur(downsampled_frame, (options.motion_blur_radius, options.motion_blur_radius), 0)
+    downsampled_frame = cv2.cvtColor(downsampled_frame, cv2.COLOR_BGR2GRAY)
+    downsampled_background = cv2.resize(background, (0,0), fx=resample_factor, fy=resample_factor)
+    downsampled_background = cv2.GaussianBlur(downsampled_background, (options.motion_blur_radius, options.motion_blur_radius), 0)
+    downsampled_background = cv2.cvtColor(downsampled_background, cv2.COLOR_BGR2GRAY)
+
+    downsampled_noisy_mask = cv2.absdiff(downsampled_frame, downsampled_background)
+    _, downsampled_noisy_mask = cv2.threshold(downsampled_noisy_mask, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
 
     # Get rid of noise in the mask.
-    noisy_mask = cv2.cvtColor(noisy_mask, cv2.COLOR_RGB2GRAY)
-    _, contours, hierarchy = cv2.findContours(noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    _, contours, _ = cv2.findContours(downsampled_noisy_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
 
-    height, width = noisy_mask.shape[:2]
-    surface = height * width
-    denoised_bw_mask = numpy.zeros((height, width), numpy.uint8)
+    downsampled_height, downsampled_width = downsampled_noisy_mask.shape[:2]
+    surface = downsampled_height * downsampled_width
+    downsampled_denoised_bw_mask = numpy.zeros((downsampled_height, downsampled_width), numpy.uint8)
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        fraction = area / surface
+        fraction = area / (resample_factor * resample_factor * surface)
         if fraction > options.motion_discard_small_polygons:
             hull = cv2.convexHull(cnt)
-            cv2.fillPoly(denoised_bw_mask, [hull], 255, 8)
+            cv2.fillPoly(downsampled_denoised_bw_mask, [hull], 255, 8)
 
     # Extract object from background.
+    denoised_bw_mask = cv2.resize(downsampled_denoised_bw_mask, (0, 0), fx=1/resample_factor, fy=1/resample_factor)
+    denoised_mask = cv2.cvtColor(denoised_bw_mask, cv2.COLOR_GRAY2RGB)
+
     split_1, split_2, split_3 = cv2.split(frame)
     object_frame = cv2.merge([split_1, split_2, split_3, denoised_bw_mask])
 
@@ -213,7 +227,7 @@ def capture_by_unhiding():
         cv2.imwrite("/tmp/background.png", background)
         cv2.imwrite("/tmp/frame.png", frame)
         cv2.imwrite("/tmp/object.png", object_frame)
-        cv2.imwrite("/tmp/noisy_mask.png", noisy_mask)
+        cv2.imwrite("/tmp/noisy_mask.png", downsampled_noisy_mask)
         cv2.imwrite("/tmp/denoised_bw_mask.png", denoised_bw_mask)
 
     return [object_frame]
