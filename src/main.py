@@ -240,35 +240,40 @@ def capture_everything():
 
     return captured_frames
 
-_background_for_capture_by_unhiding = None
-
-
+_full_image_for_capture_by_unhiding = None
 def capture_by_unhiding():
-    """Image acquisition strategy: on the first call, take a picture, assume
-    it's the background. On a second call, wait until the image has stabilized,
-    then capture a second image, assume it's the image with the object. Compute
-    the difference between both images, use it to remove the background."""
+    """Image acquisition strategy: on the first call, take a picture, assume it's
+    the full image, including the object. On a second call, wait until the image
+    has stabilized, then capture a second image, assume it's the image without
+    the object. Compute the difference between both images, use it to remove
+    the background."""
 
-    global _background_for_capture_by_unhiding
-    if _background_for_capture_by_unhiding is None:
-        logger.debug("Capturing background.")
-        # First, capture the background.
-        _background_for_capture_by_unhiding = camera.capture()
+    global _full_image_for_capture_by_unhiding
+    if _full_image_for_capture_by_unhiding is None:
+        logger.debug("Capturing full image.")
 
-        audioutils.playfile(get_sound('show_me.wav'))
+        # Warm up the camera and let it do its white balance while
+        # we give the instructions
+        camera.start()
+        audioutils.playfile(get_sound('register_step1.wav'))
+
+        # First, capture the full image.
+        _full_image_for_capture_by_unhiding = camera.capture()
+        audioutils.play(SHUTTER_TONE)
+
+        audioutils.playfile(get_sound('register_step2.wav')) # Lasts ~4 seconds.
         # Continue after a moment
-        return 2  # Seconds.
+        return 0 # Seconds.
 
     # At this stage, we have waited a few seconds, let's resume capture.
     logger.debug("Capturing object.")
 
-    background = _background_for_capture_by_unhiding
-    _background_for_capture_by_unhiding = None
-
+    full_image = _full_image_for_capture_by_unhiding
+    _full_image_for_capture_by_unhiding = None
     stable_captured_frames = 0
     surface = options.video_width * options.video_height
 
-    previous_frame = background
+    previous_frame = full_image
     frame = None
     while stable_captured_frames < options.motion_stability_duration:
         frame = camera.capture()
@@ -285,8 +290,8 @@ def capture_by_unhiding():
         else:
             stable_captured_frames = 0
 
-    # At this stage, `background` should contain the background
-    # and `frame` should contain the background + the object.
+    # At this stage, `full_image` should contain the background + object
+    # and `frame` should contain the background without the object.
     # Let's compute a difference.
 
     # We start by resampling and blurring to remove as many small differences
@@ -301,18 +306,18 @@ def capture_by_unhiding():
                                          0)
     downsampled_frame = cv2.cvtColor(downsampled_frame,
                                      cv2.COLOR_BGR2GRAY)
-    downsampled_background = cv2.resize(background, (0, 0),
+    downsampled_full_image = cv2.resize(full_image, (0, 0),
                                         fx=resample_factor,
                                         fy=resample_factor)
-    downsampled_background = cv2.GaussianBlur(downsampled_background,
+    downsampled_full_image = cv2.GaussianBlur(downsampled_full_image,
                                               (options.motion_blur_radius,
                                                options.motion_blur_radius),
                                               0)
-    downsampled_background = cv2.cvtColor(downsampled_background,
+    downsampled_full_image = cv2.cvtColor(downsampled_full_image,
                                           cv2.COLOR_BGR2GRAY)
 
     downsampled_noisy_mask = cv2.absdiff(downsampled_frame,
-                                         downsampled_background)
+                                         downsampled_full_image)
     _, downsampled_noisy_mask = cv2.threshold(downsampled_noisy_mask, 0, 255,
                                               (cv2.THRESH_BINARY_INV |
                                                cv2.THRESH_OTSU))
@@ -339,19 +344,21 @@ def capture_by_unhiding():
     # Extract object from background.
     denoised_bw_mask = cv2.resize(downsampled_denoised_bw_mask, (0, 0),
                                   fx=1/resample_factor,
-                                  fy=1/resample_factor)
+                                  fy=1/resample_factor,
+                                  interpolation=cv2.INTER_NEAREST)
 
-    split_1, split_2, split_3 = cv2.split(frame)
+    split_1, split_2, split_3 = cv2.split(full_image)
     object_frame = cv2.merge([split_1, split_2, split_3, denoised_bw_mask])
 
     audioutils.playAsync(SHUTTER_TONE)
 
     # Useful for debugging.
     if DEBUG:
-        cv2.imwrite("/tmp/background.png", background)
+        cv2.imwrite("/tmp/full_image.png", full_image)
         cv2.imwrite("/tmp/frame.png", frame)
         cv2.imwrite("/tmp/object.png", object_frame)
         cv2.imwrite("/tmp/noisy_mask.png", downsampled_noisy_mask)
+        cv2.imwrite("/tmp/downsampled_denoised_bw_mask.png", downsampled_denoised_bw_mask)
         cv2.imwrite("/tmp/denoised_bw_mask.png", denoised_bw_mask)
 
     return [object_frame]
@@ -451,7 +458,8 @@ def capture_by_subtracting():
         # mask and use it to extract the object, with transparency.
         bw_mask = cv2.resize(downsampled_bw_mask, (0, 0),
                              fx=1/resample_factor,
-                             fy=1/resample_factor)
+                             fy=1/resample_factor,
+                             interpolation=cv2.INTER_NEAREST)
         split_1, split_2, split_3 = cv2.split(frame)
         object_frame = cv2.merge([split_1, split_2, split_3, bw_mask])
         object_frames.append(object_frame)
