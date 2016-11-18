@@ -77,6 +77,7 @@ def playfile(filename):
             speaker.setformat(FORMAT)
             speaker.setperiodsize(1000)
             starttime = time.time()
+            f.seek(44)  # skip the wav header
             while True:
                 samples = f.read(2000)
                 if not samples:

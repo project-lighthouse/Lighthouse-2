@@ -92,13 +92,13 @@ def match_item(frames):
 
     if len(matches) == 0:
         logger.info("Too few features.")
-        audioutils.playfile(get_sound('nothing_recognized.raw'))
+        audioutils.playfile(get_sound('nothing_recognized.wav'))
         return
 
     accurate_matches = pick_only_accurate_matches(matches)
 
     if len(accurate_matches) == 0:
-        audioutils.playfile(get_sound('noitem.raw'))
+        audioutils.playfile(get_sound('noitem.wav'))
         logger.debug("No accurate matches found (closest match has score %s).",
                      matches[0][0] if len(matches) > 0 else 0)
     elif len(accurate_matches) == 1:
@@ -106,7 +106,7 @@ def match_item(frames):
         logger.debug("Found one match with score '%s'.", score)
         audioutils.playfile(item.audio_filename())
     else:
-        audioutils.playfile(get_sound('multipleitems.raw'))
+        audioutils.playfile(get_sound('multipleitems.wav'))
         logger.debug("Found several matches with the following scores:")
         for (score, match) in accurate_matches:
             logger.debug("Score: %s", score)
@@ -254,9 +254,8 @@ def capture_by_unhiding():
         logger.debug("Capturing background.")
         # First, capture the background.
         _background_for_capture_by_unhiding = camera.capture()
-        # audioutils.playAsync(SHUTTER_TONE)
 
-        audioutils.playfile(get_sound('show_me.raw'))
+        audioutils.playfile(get_sound('show_me.wav'))
         # Continue after a moment
         return 2  # Seconds.
 
@@ -374,7 +373,7 @@ def capture_by_subtracting():
     expected_number_of_frames = options.motion_skip_frames + \
                                 options.matching_n_frames
 
-    audioutils.playfile(get_sound('shake_it.raw'))
+    audioutils.playfile(get_sound('shake_it.wav'))
 
     # Capture images. We expect that the user is moving the object in front of
     # the camera. Continue filming until motion stabilizes.
@@ -488,12 +487,12 @@ def record_new_item(frames):
             logger.info("Too few features in the frame.")
 
     if best_description is None:
-        audioutils.playfile(get_sound('nothing_recognized.raw'))
+        audioutils.playfile(get_sound('nothing_recognized.wav'))
         return
 
     audio = None
     while audio is None:
-        audioutils.playfile(get_sound('afterthetone.raw'))
+        audioutils.playfile(get_sound('afterthetone.wav'))
         audioutils.play(START_RECORDING_TONE)
         audio = audioutils.record(min_duration=2,
                                   max_duration=options.max_record_time,
@@ -502,11 +501,11 @@ def record_new_item(frames):
         audioutils.play(STOP_RECORDING_TONE)
         if len(audio) < 800:  # if we got less than 50ms of sound
             audio = None
-            audioutils.playfile(get_sound('nosound.raw'))
+            audioutils.playfile(get_sound('nosound.wav'))
 
     item = db.add(best_image, audio, best_description)
     logger.info("Added image in %s.", item.dirname)
-    audioutils.playfile(get_sound('registered.raw'))
+    audioutils.playfile(get_sound('registered.wav'))
     audioutils.play(audio)
 
 
