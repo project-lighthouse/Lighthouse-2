@@ -304,8 +304,6 @@ def capture_by_unhiding():
                                          (options.motion_blur_radius,
                                           options.motion_blur_radius),
                                          0)
-    downsampled_frame = cv2.cvtColor(downsampled_frame,
-                                     cv2.COLOR_BGR2GRAY)
     downsampled_full_image = cv2.resize(full_image, (0, 0),
                                         fx=resample_factor,
                                         fy=resample_factor)
@@ -313,11 +311,13 @@ def capture_by_unhiding():
                                               (options.motion_blur_radius,
                                                options.motion_blur_radius),
                                               0)
-    downsampled_full_image = cv2.cvtColor(downsampled_full_image,
-                                          cv2.COLOR_BGR2GRAY)
 
-    downsampled_noisy_mask = cv2.absdiff(downsampled_frame,
-                                         downsampled_full_image)
+
+    b1, g1, r1 = cv2.split(downsampled_frame)
+    b2, g2, r2 = cv2.split(downsampled_full_image)
+    downsampled_noisy_mask = cv2.absdiff(b1, b2) // 3 \
+        + cv2.absdiff(g1, g2) // 3 \
+        + cv2.absdiff(r1, r2) // 3
     _, downsampled_noisy_mask = cv2.threshold(downsampled_noisy_mask, 0, 255,
                                               (cv2.THRESH_BINARY_INV |
                                                cv2.THRESH_OTSU))
