@@ -36,7 +36,7 @@ def get_config():
     group.add_argument('--video-fps', help='Video frame rate in FPS (default: 15).', default=15, type=int)
     group.add_argument('--video-resample-factor', help='Resampling factor to apply before motion detection (default: .3). Lower values increase speed but decrease quality.', default=.3, type=float)
 
-    group.add_argument('--motion-background-removal-strategy', help='Strategy for removing the background (default: "keep-everything"). Can be "keep-everything" (don\'t remove the background), "now-you-see-me" (take a picture without the object then with the object) or "moving-object" (move the object in front of the camera for a second).', default='keep-everything', choices=['keep-everything', 'now-you-see-me', 'moving-object'])
+    group.add_argument('--motion-background-removal-strategy', help='Strategy for removing the background (default: "now-you-see-me"). Can be "keep-everything" (don\'t remove the background), "now-you-see-me" (take a picture without the object then with the object) or "moving-object" (move the object in front of the camera for a second).', default='now-you-see-me', choices=['keep-everything', 'now-you-see-me', 'moving-object'])
     group.add_argument('--motion-stability-factor', metavar='S', help='Determine when two consecutive frames are considered stable. We check if ||(frame_1, frame_2)|| / surface <= S. (default: .1)', default=.1, type=float)
     group.add_argument('--motion-stability-duration', help='Number of successive stable frames before we assume that the user has stopped moving the object (default: 5).', default=5, type=int)
     group.add_argument('--motion-blur-radius', default=25, type=int)
