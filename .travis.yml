@@ -7,7 +7,7 @@ python:
 
 branches:
   only:
-    - prototype
+    - master
 
 install:
   - pip install pylint

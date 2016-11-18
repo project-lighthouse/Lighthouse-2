@@ -1,4 +1,4 @@
-# pylint: disable=line-too-long
+# pylint: disable=line-too-long,too-many-statements
 import argparse
 import logging.config
 import os
@@ -127,7 +127,7 @@ def get_config():
     if args.video_resample_factor <= 0:
         args.video_resample_factor = .01
     elif args.video_resample_factor > 1:
-        args.video_resample_factor = 1
+        args.video_resample_factor = 1.0
     #
     # if args.acquisition_buffer_init <= 0:
     #     args.acquisition_buffer_init = .01
